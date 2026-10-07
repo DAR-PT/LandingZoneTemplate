@@ -2,53 +2,62 @@ name: Delete Spokes
 
 on:
   workflow_dispatch:
+
 permissions:
   id-token: write
   contents: write
+
 jobs:
+
   delete-spokes:
+
     runs-on: ubuntu-latest
+
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+
       - name: Azure Login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Terraform Init
-        run: terraform init
+
       - name: Find Spokes To Delete
         shell: bash
         run: |
+
           az group list \
             --query "[?contains(name, 'RG-Spoke-') && tags.keepalive=='false'].name" \
             -o tsv > spokes_to_delete.txt
+
           echo "Spokes marked for deletion:"
           cat spokes_to_delete.txt
-      - name: Destroy Non-KeepAlive Spokes
+
+      - name: Delete Non-KeepAlive Spokes
         shell: bash
         run: |
+
           while read RG; do
+
             [ -z "$RG" ] && continue
+
             TEAM=$(echo "$RG" \
               | sed 's/^RG-Spoke-//' \
               | sed 's/-SBX$//')
-            echo "Deleting team: $TEAM"
-            INDEX=$(jq -r --arg t "$TEAM" '.[$t]' teams.json)
-            cat > terraform.auto.tfvars.json <<EOF
-            {
-              "team_name": "$TEAM",
-              "team_index": $INDEX,
-              "keepAlive": "false"
-            }
-            EOF
-            terraform destroy -auto-approve
 
-            jq --arg team "$TEAM" 'del(.[$team])' teams.json > tmp.json
+            echo "Deleting team: $TEAM"
+
+            az group delete \
+              --name "$RG" \
+              --yes
+
+            jq --arg team "$TEAM" \
+              'del(.[$team])' \
+              teams.json > tmp.json
+
             mv tmp.json teams.json
 
           done < spokes_to_delete.txt
@@ -67,13 +76,19 @@ jobs:
       - name: Reset KeepAlive Flag
         shell: bash
         run: |
+
           while read RG; do
+
             [ -z "$RG" ] && continue
-            echo "Resetting keepalive on $RG"
+
+            echo "Resetting keepalive tag on $RG"
+
             az group update \
               --name "$RG" \
               --set tags.keepalive=false
+
           done < spokes_to_reset.txt
+
       - name: Commit Updated Registry
         shell: bash
         run: |
@@ -83,6 +98,6 @@ jobs:
 
           git add teams.json
 
-          git commit -m "Scheduler cleanup" || exit 0
+          git commit -m "Nightly spoke cleanup" || exit 0
 
           git push
