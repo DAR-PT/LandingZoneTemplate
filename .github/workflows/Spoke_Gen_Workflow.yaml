@@ -62,10 +62,10 @@ jobs:
             "team_index": $NEXT
           }
           EOF
-          - name: Show tfvars
-          run: |
-            cat terraform.auto.tfvars.json
           echo "Allocated team index: $NEXT"
+          - name: Show tfvars
+            run: |
+              cat terraform.auto.tfvars.json
       - name: Terraform Init
         run: terraform init
       - name: Terraform Validate
