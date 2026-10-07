@@ -3,5 +3,5 @@ variable "team_name" {
 }
 
 variable "team_index" {
-type = number
+  type = number
 }
