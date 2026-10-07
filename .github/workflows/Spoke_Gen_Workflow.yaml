@@ -35,8 +35,11 @@ jobs:
             echo "Team already exists"
             exit 1
           fi
-          MAX=$(jq '[.[]] | max // -1' teams.json)
-          NEXT=$((MAX + 1))
+          NEXT=$(jq '[.[]] as $used
+          | range(1;1024)
+          | select(. as $i | $used | index($i) | not)
+          | first
+          ' teams.json)
           jq \
             --arg team "$TEAM" \
             --argjson idx "$NEXT" \
