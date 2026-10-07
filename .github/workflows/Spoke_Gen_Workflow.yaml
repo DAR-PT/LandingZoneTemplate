@@ -56,8 +56,8 @@ jobs:
           cat > terraform.auto.tfvars.json <<EOF
           {
             "team_name": "$TEAM",
-            "team_index": $NEXT
-            "keepAlive":  github.event.inputs.keepalive
+            "team_index": $NEXT,
+            "keepAlive":  "${{ github.event.inputs.keepalive }}"
           }
           EOF
           echo "Allocated team index: $NEXT"
