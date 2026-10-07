@@ -6,11 +6,6 @@ on:
         description: Spoke name
         required: true
         type: string
-      keepalive:
-        description: Spoke Persistence
-        required: false
-        default: "false"
-        type: string  
 permissions:
   id-token: write
   contents: write
