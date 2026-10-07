@@ -3,7 +3,7 @@ resource "azurerm_resource_group" "spoke" {
   location = "North Europe"
   tags = {
     Team      = var.team_name
-    keepalive = "true"
+    keepalive = var.keepAlive
   }
 }
 

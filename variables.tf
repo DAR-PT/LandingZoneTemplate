@@ -5,3 +5,8 @@ variable "team_name" {
 variable "team_index" {
   type = number
 }
+
+variable "keepAlive" {
+  type    = string
+  default = "false"
+}
