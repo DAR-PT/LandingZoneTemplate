@@ -1,0 +1,91 @@
+name: Create Spoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      spoke_name:
+        description: Spoke name
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+  create-spoke:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Allocate Team Index
+        shell: bash
+        run: |
+
+          TEAM="${{ github.event.inputs.spoke_name }}"
+
+          if [ ! -f teams.json ]; then
+            echo '{}' > teams.json
+          fi
+
+          if jq -e --arg t "$TEAM" '.[$t]' teams.json > /dev/null; then
+            echo "Team already exists"
+            exit 1
+          fi
+
+          MAX=$(jq '[.[]] | max // -1' teams.json)
+
+          NEXT=$((MAX + 1))
+
+          jq \
+            --arg team "$TEAM" \
+            --argjson idx "$NEXT" \
+            '. + {($team): $idx}' \
+            teams.json > tmp.json
+
+          mv tmp.json teams.json
+
+          cat teams.json
+
+          cat > terraform.auto.tfvars.json <<EOF
+          {
+            "team_name": "$TEAM",
+            "team_index": $NEXT
+          }
+          EOF
+
+          echo "Allocated team index: $NEXT"
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+
+      - name: Commit Allocation Registry
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add teams.json
+
+          git commit -m "Add team ${{ github.event.inputs.spoke_name }}" || exit 0
+
+          git push
