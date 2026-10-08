@@ -32,7 +32,7 @@ jobs:
         run: |
 
           az group list \
-            --query "[?contains(name, 'RG-Spoke-') && tags.keepalive=='false'].name" \
+            --query "[?contains(name, 'RG-Spoke-') && tags.keepalive!='true'].name" \
             -o tsv > spokes_to_delete.txt
 
           echo "Spokes marked for deletion:"
