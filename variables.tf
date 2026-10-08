@@ -1,8 +1,8 @@
-variable "team_name" {
+variable "spoke_name" {
   type = string
 }
 
-variable "team_index" {
+variable "spoke_index" {
   type = number
 }
 
