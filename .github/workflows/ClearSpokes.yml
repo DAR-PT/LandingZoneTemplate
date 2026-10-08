@@ -41,9 +41,7 @@ jobs:
       - name: Delete Non-KeepAlive Spokes
         shell: bash
         run: |
-
           while read RG; do
-
             [ -z "$RG" ] && continue
 
             TEAM=$(echo "$RG" \
@@ -51,6 +49,13 @@ jobs:
               | sed 's/-SBX$//')
 
             echo "Deleting team: $TEAM"
+
+            PEERING_NAME="hub-to-$TEAM"
+
+            az network vnet peering delete \
+              --resource-group RG-Hub-SBX \
+              --vnet-name vnet-hub-sbx \
+              --name "$PEERING_NAME"
 
             az group delete \
               --name "$RG" \
