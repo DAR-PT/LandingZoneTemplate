@@ -1,15 +1,15 @@
 resource "azurerm_resource_group" "spoke" {
-  name     = "RG-Spoke-${var.team_name}-SBX"
+  name     = "RG-Spoke-${var.spoke_name}-SBX"
   location = "North Europe"
   tags = {
-    Team      = var.team_name
+    Team      = var.spoke_name
     keepalive = lower(var.keepAlive)
   }
 }
 
 
 resource "azurerm_virtual_network" "spoke_vnet" {
-  name                = "vnet-${var.team_name}-sbx"
+  name                = "vnet-${var.spoke_name}-sbx"
   location            = azurerm_resource_group.spoke.location
   resource_group_name = azurerm_resource_group.spoke.name
 
@@ -34,7 +34,7 @@ data "azurerm_virtual_network" "vnet_hub" {
 }
 
 resource "azurerm_virtual_network_peering" "spoke_to_hub" {
-  name = "${var.team_name}-to-hub"
+  name = "${var.spoke_name}-to-hub"
 
   resource_group_name  = azurerm_resource_group.spoke.name
   virtual_network_name = azurerm_virtual_network.spoke_vnet.name
@@ -46,7 +46,7 @@ resource "azurerm_virtual_network_peering" "spoke_to_hub" {
 
 
 resource "azurerm_virtual_network_peering" "hub_to_spoke" {
-  name = "hub-to-${var.team_name}"
+  name = "hub-to-${var.spoke_name}"
 
   resource_group_name  = data.azurerm_virtual_network.vnet_hub.resource_group_name
   virtual_network_name = data.azurerm_virtual_network.vnet_hub.name
@@ -88,7 +88,7 @@ data "azurerm_private_dns_zone" "spokes" {
 
 
 resource "azurerm_private_dns_zone_virtual_network_link" "spoke_internal" {
-  name                  = "${var.team_name}-dar-link"
+  name                  = "${var.spoke_name}-dar-link"
   private_dns_zone_id = data.azurerm_private_dns_zone.spokes.id
   virtual_network_id    = azurerm_virtual_network.spoke_vnet.id
 
@@ -97,7 +97,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "spoke_internal" {
 
 
 resource "azurerm_private_dns_zone_virtual_network_link" "keyvault" {
-  name                = "${var.team_name}-kv-link"
+  name                = "${var.spoke_name}-kv-link"
   private_dns_zone_id = data.azurerm_private_dns_zone.keyvault.id
   virtual_network_id  = azurerm_virtual_network.spoke_vnet.id
 
@@ -105,7 +105,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "keyvault" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "storage" {
-  name                = "${var.team_name}-storage-link"
+  name                = "${var.spoke_name}-storage-link"
   private_dns_zone_id = data.azurerm_private_dns_zone.storage.id
   virtual_network_id  = azurerm_virtual_network.spoke_vnet.id
 
@@ -113,7 +113,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "storage" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "acr" {
-  name                = "${var.team_name}-acr-link"
+  name                = "${var.spoke_name}-acr-link"
   private_dns_zone_id = data.azurerm_private_dns_zone.acr.id
   virtual_network_id  = azurerm_virtual_network.spoke_vnet.id
 
@@ -121,7 +121,7 @@ resource "azurerm_private_dns_zone_virtual_network_link" "acr" {
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "sql" {
-  name                = "${var.team_name}-sql-link"
+  name                = "${var.spoke_name}-sql-link"
   private_dns_zone_id = data.azurerm_private_dns_zone.sql.id
   virtual_network_id  = azurerm_virtual_network.spoke_vnet.id
 
