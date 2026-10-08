@@ -8,5 +8,4 @@ variable "team_index" {
 
 variable "keepAlive" {
   type    = string
-  default = "false"
 }
