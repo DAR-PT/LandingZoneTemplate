@@ -55,31 +55,7 @@ jobs:
             az network vnet peering delete \
               --resource-group RG-Hub-SBX \
               --vnet-name vnet-hub-sbx \
-              --name "$PEERING_NAME"
-              
-            az network private-dns link vnet delete \
-              --resource-group RG-Hub-SBX \
-              --zone-name privatelink.database.windows.net \
-              --name "${TEAM}-sql-link" \
-              --yes || true
-
-            az network private-dns link vnet delete \
-              --resource-group RG-Hub-SBX \
-              --zone-name privatelink.vaultcore.azure.net \
-              --name "${TEAM}-kv-link" \
-              --yes || true
-
-            az network private-dns link vnet delete \
-              --resource-group RG-Hub-SBX \
-              --zone-name privatelink.azurecr.io \
-              --name "${TEAM}-acr-link" \
-              --yes || true
-
-            az network private-dns link vnet delete \
-              --resource-group RG-Hub-SBX \
-              --zone-name privatelink.blob.core.windows.net \
-              --name "${TEAM}-storage-link" \
-              --yes || true
+              --name "$PEERING_NAME"         
               
             az group delete \
               --name "$RG" \
