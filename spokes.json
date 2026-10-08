@@ -1,5 +1,6 @@
 {
   "banana": 1,
   "teste3": 2,
-  "testeDNS": 3
+  "testeDNS": 3,
+  "testebackendpool": 4
 }
