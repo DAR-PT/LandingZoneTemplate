@@ -28,15 +28,15 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Allocate Team Index
+      - name: Allocate spoke Index
         shell: bash
         run: |
-          TEAM="${{ github.event.inputs.spoke_name }}"
-          if [ ! -f teams.json ]; then
-            echo '{}' > teams.json
+          spoke="${{ github.event.inputs.spoke_name }}"
+          if [ ! -f spokes.json ]; then
+            echo '{}' > spokes.json
           fi
-          if jq -e --arg t "$TEAM" '.[$t]' teams.json > /dev/null; then
-            echo "Team already exists"
+          if jq -e --arg t "$spoke" '.[$t]' spokes.json > /dev/null; then
+            echo "spoke already exists"
             exit 1
           fi
           NEXT=$(jq '
@@ -45,22 +45,22 @@ jobs:
               range(1;1025)
               | select(. as $i | ($used | index($i)) | not)
             )
-          ' teams.json)
+          ' spokes.json)
           jq \
-            --arg team "$TEAM" \
+            --arg spoke "$spoke" \
             --argjson idx "$NEXT" \
-            '. + {($team): $idx}' \
-            teams.json > tmp.json
-          mv tmp.json teams.json
-          cat teams.json
+            '. + {($spoke): $idx}' \
+            spokes.json > tmp.json
+          mv tmp.json spokes.json
+          cat spokes.json
           cat > terraform.auto.tfvars.json <<EOF
           {
-            "team_name": "$TEAM",
-            "team_index": $NEXT,
+            "spoke_name": "$spoke",
+            "spoke_index": $NEXT,
             "keepAlive":  "${{ github.event.inputs.keepalive }}"
           }
           EOF
-          echo "Allocated team index: $NEXT"
+          echo "Allocated spoke index: $NEXT"
       - name: Show tfvars
         run: |
           cat terraform.auto.tfvars.json
@@ -76,6 +76,6 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add teams.json
-          git commit -m "Add team ${{ github.event.inputs.spoke_name }}" || exit 0
+          git add spokes.json
+          git commit -m "Add spoke ${{ github.event.inputs.spoke_name }}" || exit 0
           git push
