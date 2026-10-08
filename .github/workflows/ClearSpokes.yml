@@ -46,52 +46,52 @@ jobs:
 
             [ -z "$RG" ] && continue
 
-            TEAM=$(echo "$RG" \
+            spoke=$(echo "$RG" \
               | sed 's/^RG-Spoke-//' \
               | sed 's/-SBX$//')
 
-            echo "Deleting team: $TEAM"
+            echo "Deleting spoke: $spoke"
 
-             PEERING_NAME="hub-to-$TEAM"
+             PEERING_NAME="hub-to-$spoke"
 
             az network vnet peering delete \
               --resource-group RG-Hub-SBX \
               --vnet-name vnet-hub-sbx \
               --name "$PEERING_NAME" 
-            echo "Deleting DNS links for $TEAM"
+            echo "Deleting DNS links for $spoke"
 
             az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.database.windows.net \
-              --name "${TEAM}-sql-link" \
+              --name "${spoke}-sql-link" \
               --yes || true
 
             az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.vaultcore.azure.net \
-              --name "${TEAM}-kv-link" \
+              --name "${spoke}-kv-link" \
               --yes || true
 
             az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.azurecr.io \
-              --name "${TEAM}-acr-link" \
+              --name "${spoke}-acr-link" \
               --yes || true
 
             az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.blob.core.windows.net \
-              --name "${TEAM}-storage-link" \
+              --name "${spoke}-storage-link" \
               --yes || true  
             az group delete \
               --name "$RG" \
               --yes
 
-            jq --arg team "$TEAM" \
-              'del(.[$team])' \
-              teams.json > tmp.json
+            jq --arg spoke "$spoke" \
+              'del(.[$spoke])' \
+              spokes.json > tmp.json
 
-            mv tmp.json teams.json
+            mv tmp.json spokes.json
 
           done < spokes_to_delete.txt
 
@@ -129,7 +129,7 @@ jobs:
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-          git add teams.json
+          git add spokes.json
 
           git commit -m "Nightly spoke cleanup" || exit 0
 
