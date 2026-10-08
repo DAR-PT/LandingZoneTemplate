@@ -74,13 +74,6 @@ jobs:
                 --yes || true
               done
               
-              az network private-dns link vnet delete \
-                --resource-group RG-Hub-SBX \
-                --zone-name "$DNS_ZONE" \
-                --name "$LINK_NAME" \
-                --yes || true
-            done
-              
             az group delete \
               --name "$RG" \
               --yes
