@@ -56,7 +56,31 @@ jobs:
               --resource-group RG-Hub-SBX \
               --vnet-name vnet-hub-sbx \
               --name "$PEERING_NAME"
+              
+            for ZONE in \
+                "privatelink.database.windows.net:${TEAM}-sql-link" \
+                "privatelink.vaultcore.azure.net:${TEAM}-kv-link" \
+                "privatelink.azurecr.io:${TEAM}-acr-link" \
+                "privatelink.blob.core.windows.net:${TEAM}-storage-link"
+            do
+              DNS_ZONE=$(echo "$ZONE" | cut -d ':' -f1)
+              LINK_NAME=$(echo "$ZONE" | cut -d ':' -f2)
+              echo "Deleting DNS link: $LINK_NAME from zone $DNS_ZONE"
 
+              az network private-dns link vnet delete \
+                --resource-group RG-Hub-SBX \
+                --zone-name "$DNS_ZONE" \
+                --name "$LINK_NAME" \
+                --yes || true
+              done
+              
+              az network private-dns link vnet delete \
+                --resource-group RG-Hub-SBX \
+                --zone-name "$DNS_ZONE" \
+                --name "$LINK_NAME" \
+                --yes || true
+            done
+              
             az group delete \
               --name "$RG" \
               --yes
