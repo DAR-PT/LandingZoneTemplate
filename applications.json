@@ -1,0 +1,6 @@
+{
+  "teste3": {
+    "type": "containerapp",
+    "fqdn": "teste3.spoke.app"
+  }
+}
