@@ -61,6 +61,17 @@ jobs:
           }
           EOF
           echo "Allocated spoke index: $NEXT"
+      - name: Create Backend Pool
+        shell: bash
+        run: |
+          SPOKE="${{ github.event.inputs.spoke_name }}"
+          FQDN="$(echo "$SPOKE" | tr '[:upper:]' '[:lower:]').dar.internal"
+          
+          az network application-gateway address-pool create \
+            --gateway-name agw-sbx \
+            --resource-group RG-Hub-SBX \
+            --name "${SPOKE}-pool" \
+            --servers "$FQDN"
       - name: Show tfvars
         run: |
           cat terraform.auto.tfvars.json   
