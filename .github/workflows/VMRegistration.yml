@@ -1,0 +1,71 @@
+name: Register VM
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      spoke_name:
+        description: Spoke Name
+        required: true
+        type: string
+
+      private_ip:
+        description: VM Private IP
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: write
+
+jobs:
+
+  register:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Update Registry
+        shell: bash
+        run: |
+
+          SPOKE="${{ github.event.inputs.spoke_name }}"
+          IP="${{ github.event.inputs.private_ip }}"
+
+          if [ ! -f applications.json ]; then
+            echo '{}' > applications.json
+          fi
+
+          jq \
+            --arg spoke "$SPOKE" \
+            --arg ip "$IP" \
+            '. + {
+                ($spoke): {
+                  type: "vm",
+                  ip: $ip
+                }
+              }' \
+            applications.json > tmp.json
+
+          mv tmp.json applications.json
+
+      - name: Commit Registry
+        run: |
+
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+
+          git add applications.json
+
+          git commit -m "Register VM for ${{ github.event.inputs.spoke_name }}" || exit 0
+
+          git push
