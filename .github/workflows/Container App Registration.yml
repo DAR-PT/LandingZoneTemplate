@@ -58,40 +58,63 @@ jobs:
 
           mv tmp.json applications.json
           
-      - name: Create DNS Record
+      - name: Register Container App
         shell: bash
         run: |
 
-          SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
+          retry() {
+              local max=5
+              local delay=15
+              local attempt=1
 
-          TARGET="${{ github.event.inputs.container_app_fqdn }}"
+              while true; do
 
-          echo "Creating CNAME:"
-          echo "${SPOKE}.dar.internal"
-          echo " -> ${TARGET}"
+              "$@" && return 0
 
-          az network private-dns record-set cname create \
-            --resource-group RG-Hub-SBX \
-            --zone-name dar.internal \
-            --name "$SPOKE"
+              if [ "$attempt" -ge "$max" ]; then
+                echo "FAILED after $max attempts"
+                return 1
+              fi
 
-          az network private-dns record-set cname set-record \
-            --resource-group RG-Hub-SBX \
-            --zone-name dar.internal \
-            --record-set-name "$SPOKE" \
-            --cname "$TARGET"
+              echo "Retry $attempt/$max"
+              attempt=$((attempt + 1))
 
-      - name: Verify Record
-        shell: bash
-        run: |
+              sleep $delay
 
-          SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
+              done
+            }
 
-          az network private-dns record-set cname show \
-            --resource-group RG-Hub-SBX \
-            --zone-name dar.internal \
-            --name "$SPOKE"
+            SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
+
+            TARGET="${{ github.event.inputs.container_app_fqdn }}"
             
+            TARGET=$(echo "$TARGET" \
+              | sed 's|^https://||' \
+              | sed 's|^http://||' \
+              | sed 's|/$||')
+
+            echo "Registering:"
+            echo "${SPOKE}.dar.internal"
+            echo " -> ${TARGET}"
+
+           retry az network private-dns record-set cname create \
+              --resource-group RG-Hub-SBX \
+              --zone-name dar.internal \
+              --name "$SPOKE" \
+              --if-none-match
+
+           retry az network private-dns record-set cname set-record \
+              --resource-group RG-Hub-SBX \
+              --zone-name dar.internal \
+              --record-set-name "$SPOKE" \
+              --cname "$TARGET"
+
+           retry az network application-gateway address-pool update \
+              --gateway-name agw-sbx \
+              --resource-group RG-Hub-SBX \
+              --name "${SPOKE}-pool" \
+              --servers "$TARGET"
+              
       - name: Commit Registry
         run: |
 
