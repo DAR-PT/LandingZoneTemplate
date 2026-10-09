@@ -18,5 +18,9 @@
   "testnewlogic": {
     "type": "containerapp",
     "fqdn": ""
+  },
+  "teste23": {
+    "type": "containerapp",
+    "fqdn": ""
   }
 }
