@@ -14,5 +14,9 @@
   "fulltest": {
     "type": "containerapp",
     "fqdn": ""
+  },
+  "testnewlogic": {
+    "type": "containerapp",
+    "fqdn": ""
   }
 }
