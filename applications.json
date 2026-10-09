@@ -10,5 +10,9 @@
   "teste111": {
     "type": "containerapp",
     "fqdn": ""
+  },
+  "fulltest": {
+    "type": "containerapp",
+    "fqdn": ""
   }
 }
