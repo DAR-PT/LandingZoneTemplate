@@ -2,5 +2,9 @@
   "teste3": {
     "type": "containerapp",
     "fqdn": "teste3.spoke.app"
+  },
+  "RG-Spoke-teste111-SBX": {
+    "type": "containerapp",
+    "fqdn": "https://teste111-capp.wittyfield-e2824f4b.northeurope.azurecontainerapps.io"
   }
 }
