@@ -60,21 +60,8 @@ jobs:
             "keepAlive":  "${{ github.event.inputs.keepalive }}"
           }
           EOF
-          echo "Allocated spoke index: $NEXT"
-      - name: Create Backend Pool
-        shell: bash
-        run: |
-          SPOKE="${{ github.event.inputs.spoke_name }}"
-          FQDN="$(echo "$SPOKE" | tr '[:upper:]' '[:lower:]').dar.internal"
+          echo "Allocated spoke index: $NEXT" 
           
-          az network application-gateway address-pool create \
-            --gateway-name agw-sbx \
-            --resource-group RG-Hub-SBX \
-            --name "${SPOKE}-pool" \
-            --servers "$FQDN"
-      - name: Show tfvars
-        run: |
-          cat terraform.auto.tfvars.json   
       - name: Terraform Init
         run: terraform init   
       - name: Terraform Validate
@@ -83,6 +70,48 @@ jobs:
         run: terraform plan
       - name: Terraform Apply
         run: terraform apply -auto-approve
+        
+      - name: Create App Gateway Objects
+        shell: bash
+        run: |
+
+          SPOKE="${{ github.event.inputs.spoke_name }}"
+          INDEX=$(jq -r --arg s "$SPOKE" '.[$s]' spokes.json)
+
+          PRIORITY=$((100 + INDEX))
+
+          az network application-gateway address-pool create \
+            --gateway-name agw-sbx \
+            --resource-group RG-Hub-SBX \
+            --name "${SPOKE}-pool" \
+            --servers "${SPOKE}.dar.internal"
+
+          az network application-gateway http-settings create \
+            --gateway-name agw-sbx \
+            --resource-group RG-Hub-SBX \
+            --name "${SPOKE}-http" \
+            --port 80 \
+            --protocol Http \
+            --host-name-from-backend-pool true
+
+          az network application-gateway http-listener create \
+            --gateway-name agw-sbx \
+            --resource-group RG-Hub-SBX \
+            --name "${SPOKE}-listener" \
+            --frontend-ip public-frontend \
+            --frontend-port https \
+            --host-name "${SPOKE}.dar.internal"
+
+          az network application-gateway rule create \
+            --gateway-name agw-sbx \
+            --resource-group RG-Hub-SBX \
+            --name "${SPOKE}-rule" \
+            --rule-type Basic \
+            --http-listener "${SPOKE}-listener" \
+            --address-pool "${SPOKE}-pool" \
+            --http-settings "${SPOKE}-http" \
+            --priority "$PRIORITY"
+     
       - name: Commit Allocation Registry
         run: |
           git config user.name "github-actions"
