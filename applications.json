@@ -9,6 +9,6 @@
   },
   "teste111": {
     "type": "containerapp",
-    "fqdn": "https://teste111-capp.wittyfield-e2824f4b.northeurope.azurecontainerapps.io"
+    "fqdn": ""
   }
 }
