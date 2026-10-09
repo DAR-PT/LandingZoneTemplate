@@ -50,9 +50,31 @@ jobs:
               | sed 's/^RG-Spoke-//' \
               | sed 's/-SBX$//')
 
+            retry() {
+              local max=5
+              local delay=15
+              local attempt=1
+
+              while true; do
+
+              "$@" && return 0
+
+              if [ "$attempt" -ge "$max" ]; then
+                echo "FAILED after $max attempts"
+                return 1
+              fi
+
+              echo "Retry $attempt/$max"
+              attempt=$((attempt + 1))
+
+              sleep $delay
+
+              done
+            }
+            
             echo "Deleting spoke: $spoke"
 
-             PEERING_NAME="hub-to-$spoke"
+            PEERING_NAME="hub-to-$spoke"
 
             PEERING_ID=$(az network vnet peering show \
                 --resource-group RG-Hub-SBX \
@@ -65,36 +87,36 @@ jobs:
               
               echo "Deleting peering: $PEERING_ID"
               
-              az resource delete \
+              retry az resource delete \
                 --ids "$PEERING_ID"
 
               fi
+            
 
-
-            az network private-dns link vnet delete \
+            retry az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.database.windows.net \
               --name "${spoke}-sql-link" \
               --yes || true
 
-            az network private-dns link vnet delete \
+            retry az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.vaultcore.azure.net \
               --name "${spoke}-kv-link" \
               --yes || true
 
-            az network private-dns link vnet delete \
+           retry az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.azurecr.io \
               --name "${spoke}-acr-link" \
               --yes || true
 
-            az network private-dns link vnet delete \
+            retry az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.blob.core.windows.net \
               --name "${spoke}-storage-link" \
               --yes || true  
-            az group delete \
+            retry az group delete \
               --name "$RG" \
               --yes
 
@@ -127,7 +149,7 @@ jobs:
 
             echo "Resetting keepalive tag on $RG"
 
-            az group update \
+            retry az group update \
               --name "$RG" \
               --set tags.keepalive=false
 
