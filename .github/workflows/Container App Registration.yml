@@ -9,7 +9,7 @@ on:
         required: true
         type: string
 
-      container_fqdn:
+      container_app_fqdn:
         description: Container App FQDN
         required: true
         type: string
