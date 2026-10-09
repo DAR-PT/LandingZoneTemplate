@@ -57,7 +57,41 @@ jobs:
             applications.json > tmp.json
 
           mv tmp.json applications.json
+          
+      - name: Create DNS Record
+        shell: bash
+        run: |
 
+          SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
+
+          TARGET="${{ github.event.inputs.container_app_fqdn }}"
+
+          echo "Creating CNAME:"
+          echo "${SPOKE}.dar.internal"
+          echo " -> ${TARGET}"
+
+          az network private-dns record-set cname create \
+            --resource-group RG-Hub-SBX \
+            --zone-name dar.internal \
+            --name "$SPOKE"
+
+          az network private-dns record-set cname set-record \
+            --resource-group RG-Hub-SBX \
+            --zone-name dar.internal \
+            --record-set-name "$SPOKE" \
+            --cname "$TARGET"
+
+      - name: Verify Record
+        shell: bash
+        run: |
+
+          SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
+
+          az network private-dns record-set cname show \
+            --resource-group RG-Hub-SBX \
+            --zone-name dar.internal \
+            --name "$SPOKE"
+            
       - name: Commit Registry
         run: |
 
