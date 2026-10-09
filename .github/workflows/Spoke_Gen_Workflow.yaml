@@ -118,7 +118,7 @@ jobs:
             --frontend-ip private-frontend \
             --frontend-port https \
             --host-name "${SPOKE}.dar.internal" \
-            --ssl-cert gateway-cert
+            --ssl-cert wildcard-dar-internal
 
           retry_az az network application-gateway rule create \
             --gateway-name agw-sbx \
