@@ -54,11 +54,22 @@ jobs:
 
              PEERING_NAME="hub-to-$spoke"
 
-            az network vnet peering delete \
-              --resource-group RG-Hub-SBX \
-              --vnet-name vnet-hub-sbx \
-              --name "$PEERING_NAME" 
-            echo "Deleting DNS links for $spoke"
+            PEERING_ID=$(az network vnet peering show \
+                --resource-group RG-Hub-SBX \
+                --vnet-name vnet-hub-sbx \
+                --name "$PEERING_NAME" \
+                --query id \
+                -o tsv 2>/dev/null || true)
+
+              if [ -n "$PEERING_ID" ]; then
+              
+              echo "Deleting peering: $PEERING_ID"
+              
+              az resource delete \
+                --ids "$PEERING_ID"
+
+              fi
+
 
             az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
