@@ -97,12 +97,11 @@ jobs:
             echo "${SPOKE}.dar.internal"
             echo " -> ${TARGET}"
 
-           retry az network private-dns record-set cname create \
+            retry az network private-dns record-set cname create \
               --resource-group RG-Hub-SBX \
               --zone-name dar.internal \
-              --name "$SPOKE" \
-              --if-none-match
-
+              --name "$SPOKE" || true
+              
            retry az network private-dns record-set cname set-record \
               --resource-group RG-Hub-SBX \
               --zone-name dar.internal \
