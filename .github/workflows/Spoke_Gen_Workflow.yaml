@@ -89,18 +89,19 @@ jobs:
           az network application-gateway http-settings create \
             --gateway-name agw-sbx \
             --resource-group RG-Hub-SBX \
-            --name "${SPOKE}-http" \
-            --port 80 \
-            --protocol Http \
+            --name "${SPOKE}-https" \
+            --port 443 \
+            --protocol Https \
             --host-name-from-backend-pool true
 
           az network application-gateway http-listener create \
             --gateway-name agw-sbx \
             --resource-group RG-Hub-SBX \
             --name "${SPOKE}-listener" \
-            --frontend-ip public-frontend \
+            --frontend-ip private-frontend \
             --frontend-port https \
-            --host-name "${SPOKE}.dar.internal"
+            --host-name "${SPOKE}.dar.internal" \
+            --ssl-cert gateway-cert
 
           az network application-gateway rule create \
             --gateway-name agw-sbx \
@@ -109,9 +110,9 @@ jobs:
             --rule-type Basic \
             --http-listener "${SPOKE}-listener" \
             --address-pool "${SPOKE}-pool" \
-            --http-settings "${SPOKE}-http" \
+            --http-settings "${SPOKE}-https" \
             --priority "$PRIORITY"
-     
+            
       - name: Commit Allocation Registry
         run: |
           git config user.name "github-actions"
