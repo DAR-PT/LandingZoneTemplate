@@ -26,5 +26,9 @@
   "teste1": {
     "type": "containerapp",
     "fqdn": ""
+  },
+  "testetfstate2": {
+    "type": "containerapp",
+    "fqdn": ""
   }
 }
