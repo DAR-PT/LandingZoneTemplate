@@ -1,13 +1,13 @@
-name: Create Spoke
+name: Create spoke
 on:
   workflow_dispatch:
     inputs:
       spoke_name:
-        description: Spoke name
+        description: spoke name
         required: true
         type: string
       keepalive:
-        description: Spoke Persistence
+        description: spoke Persistence
         required: false
         default: "false"
         type: string
@@ -63,11 +63,14 @@ jobs:
           echo "Allocated spoke index: $NEXT" 
           
       - name: Terraform Init
-        run: terraform init -reconfigure \
-              -backend-config="resource_group_name=RG-Platform-SBX" \
-              -backend-config="storage_account_name=stplatformtfstate" \
-              -backend-config="container_name=tfstate" \
-              -backend-config="key=spokes/${SPOKE}.tfstate"  
+        run: |
+         spoke="${{ github.event.inputs.spoke_name }}"
+         
+         terraform init -reconfigure \
+          -backend-config="resource_group_name=RG-Platform-SBX" \
+          -backend-config="storage_account_name=stplatformtfstate" \
+          -backend-config="container_name=tfstate" \
+          -backend-config="key=spokes/${spoke}.tfstate"
       - name: Terraform Validate
         run: terraform validate
       - name: Terraform Plan
@@ -78,8 +81,8 @@ jobs:
       - name: Create App Gateway Objects
         shell: bash
         run: |
-          SPOKE="${{ github.event.inputs.spoke_name }}"
-          INDEX=$(jq -r --arg s "$SPOKE" '.[$s]' spokes.json)
+          spoke="${{ github.event.inputs.spoke_name }}"
+          INDEX=$(jq -r --arg s "$spoke" '.[$s]' spokes.json)
           PRIORITY=$((100 + INDEX))
 
           # Retry function with exponential backoff
@@ -104,13 +107,13 @@ jobs:
           retry_az az network application-gateway address-pool create \
             --gateway-name agw-sbx \
             --resource-group RG-Hub-SBX \
-            --name "${SPOKE}-pool" \
-            --servers "${SPOKE}.dar.internal"
+            --name "${spoke}-pool" \
+            --servers "${spoke}.dar.internal"
 
           retry_az az network application-gateway http-settings create \
             --gateway-name agw-sbx \
             --resource-group RG-Hub-SBX \
-            --name "${SPOKE}-https" \
+            --name "${spoke}-https" \
             --port 443 \
             --protocol Https \
             --host-name-from-backend-pool true
@@ -118,20 +121,20 @@ jobs:
           retry_az az network application-gateway http-listener create \
             --gateway-name agw-sbx \
             --resource-group RG-Hub-SBX \
-            --name "${SPOKE}-listener" \
+            --name "${spoke}-listener" \
             --frontend-ip private-frontend \
             --frontend-port https \
-            --host-name "${SPOKE}.dar.internal" \
+            --host-name "${spoke}.dar.internal" \
             --ssl-cert wildcard-dar-internal
 
           retry_az az network application-gateway rule create \
             --gateway-name agw-sbx \
             --resource-group RG-Hub-SBX \
-            --name "${SPOKE}-rule" \
+            --name "${spoke}-rule" \
             --rule-type Basic \
-            --http-listener "${SPOKE}-listener" \
-            --address-pool "${SPOKE}-pool" \
-            --http-settings "${SPOKE}-https" \
+            --http-listener "${spoke}-listener" \
+            --address-pool "${spoke}-pool" \
+            --http-settings "${spoke}-https" \
             --priority "$PRIORITY"
             
       - name: Commit Allocation Registry
