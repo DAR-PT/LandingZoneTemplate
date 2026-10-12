@@ -119,7 +119,10 @@ jobs:
             retry az group delete \
               --name "$RG" \
               --yes
-
+            retry az storage blob delete \
+              --account-name stplatformtfstate \
+              --container-name tfstate \
+              --name "spokes/${SPOKE}.tfstate"
             jq --arg spoke "$spoke" \
               'del(.[$spoke])' \
               spokes.json > tmp.json
