@@ -22,5 +22,9 @@
   "teste23": {
     "type": "containerapp",
     "fqdn": ""
+  },
+  "teste1": {
+    "type": "containerapp",
+    "fqdn": ""
   }
 }
