@@ -115,14 +115,45 @@ jobs:
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.blob.core.windows.net \
               --name "${spoke}-storage-link" \
-              --yes || true  
+              --yes || true 
+              
+            retry az network application-gateway rule delete \
+              --gateway-name agw-sbx \
+              --resource-group RG-Hub-SBX \
+              --name "${spoke}-rule" || true
+              
+            retry az network application-gateway http-listener delete \
+              --gateway-name agw-sbx \
+              --resource-group RG-Hub-SBX \
+              --name "${spoke}-listener" || true
+
+            retry az network application-gateway http-settings delete \
+              --gateway-name agw-sbx \
+              --resource-group RG-Hub-SBX \
+              --name "${spoke}-https" || true
+              
+            retry az network application-gateway address-pool delete \
+              --gateway-name agw-sbx \
+              --resource-group RG-Hub-SBX \
+              --name "${spoke}-pool" || true
+
+            retry az network private-dns record-set cname delete \
+              --resource-group RG-Hub-SBX \
+              --zone-name dar.internal \
+              --name "$spoke" \
+              --yes || true
+              
             retry az group delete \
               --name "$RG" \
-              --yes
-            retry az storage blob delete \
+              --yes \
+              --no-wait
+              
+           retry az storage blob delete \
               --account-name stplatformtfstate \
               --container-name tfstate \
-              --name "spokes/${SPOKE}.tfstate"
+              --name "spokes/${spoke}.tfstate" \
+              --auth-mode login || true
+              
             jq --arg spoke "$spoke" \
               'del(.[$spoke])' \
               spokes.json > tmp.json
@@ -145,7 +176,28 @@ jobs:
       - name: Reset KeepAlive Flag
         shell: bash
         run: |
+          retry() {
+              local max=5
+              local delay=15
+              local attempt=1
 
+              while true; do
+
+              "$@" && return 0
+
+              if [ "$attempt" -ge "$max" ]; then
+                echo "FAILED after $max attempts"
+                return 1
+              fi
+
+              echo "Retry $attempt/$max"
+              attempt=$((attempt + 1))
+
+              sleep $delay
+
+              done
+            }
+            
           while read RG; do
 
             [ -z "$RG" ] && continue
