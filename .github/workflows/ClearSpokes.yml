@@ -149,13 +149,13 @@ jobs:
               --no-wait
               
           ACCOUNT_KEY=$(az storage account keys list \
-            --resource-group RG-Platform-SBX \
-            --account-name stplatformtfstate \
+            --resource-group RG-Core-SBX \
+            --account-name coresbxstorageaccount \
             --query "[0].value" \
             -o tsv)
             
           retry az storage blob delete \
-            --account-name stplatformtfstate \
+            --account-name coresbxstorageaccount \
             --account-key "$ACCOUNT_KEY" \
             --container-name tfstate \
             --name "spokes/${spoke}.tfstate"
