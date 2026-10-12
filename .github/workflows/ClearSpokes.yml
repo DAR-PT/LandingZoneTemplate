@@ -148,11 +148,17 @@ jobs:
               --yes \
               --no-wait
               
-           retry az storage blob delete \
-              --account-name stplatformtfstate \
-              --container-name tfstate \
-              --name "spokes/${spoke}.tfstate" \
-              --auth-mode login || true
+          ACCOUNT_KEY=$(az storage account keys list \
+            --resource-group RG-Platform-SBX \
+            --account-name stplatformtfstate \
+            --query "[0].value" \
+            -o tsv)
+            
+          retry az storage blob delete \
+            --account-name stplatformtfstate \
+            --account-key "$ACCOUNT_KEY" \
+            --container-name tfstate \
+            --name "spokes/${spoke}.tfstate"
               
             jq --arg spoke "$spoke" \
               'del(.[$spoke])' \
