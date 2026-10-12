@@ -158,7 +158,7 @@ jobs:
             --account-name coresbxstorageaccount \
             --account-key "$ACCOUNT_KEY" \
             --container-name tfstate \
-            --name "spokes/${spoke}.tfstate"
+            --name "${spoke}.tfstate"
               
             jq --arg spoke "$spoke" \
               'del(.[$spoke])' \
