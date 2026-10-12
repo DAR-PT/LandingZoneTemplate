@@ -31,7 +31,7 @@ jobs:
       - name: Allocate spoke Index
         shell: bash
         run: |
-          spoke="${{ github.event.inputs.spoke_name }}"
+          spoke=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
           if [ ! -f spokes.json ]; then
             echo '{}' > spokes.json
           fi
@@ -64,7 +64,7 @@ jobs:
           
       - name: Terraform Init
         run: |
-         spoke="${{ github.event.inputs.spoke_name }}"
+         spoke=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
          
          terraform init -reconfigure \
           -backend-config="resource_group_name=RG-Platform-SBX" \
@@ -81,7 +81,7 @@ jobs:
       - name: Create App Gateway Objects
         shell: bash
         run: |
-          spoke="${{ github.event.inputs.spoke_name }}"
+          spoke=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
           INDEX=$(jq -r --arg s "$spoke" '.[$s]' spokes.json)
           PRIORITY=$((100 + INDEX))
 
