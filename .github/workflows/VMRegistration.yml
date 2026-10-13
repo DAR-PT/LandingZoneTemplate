@@ -1,13 +1,7 @@
-name: Register VM
+name: Create VM
 
 on:
   workflow_dispatch:
-    inputs:
-
-      vm_ip:
-        description: VM Private IP
-        required: true
-        type: string
 
 permissions:
   id-token: write
@@ -29,15 +23,40 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Set Variables
+      - name: Create VM
         shell: bash
         run: |
 
           SPOKE="${GITHUB_REPOSITORY#*/}"
           SPOKE="${SPOKE#spoke-}"
-          SPOKE=$(echo "$SPOKE" | tr '[:upper:]' '[:lower:]')
 
           echo "SPOKE=$SPOKE" >> $GITHUB_ENV
+
+          VM_NAME="${SPOKE}-vm"
+
+          echo "VM_NAME=$VM_NAME" >> $GITHUB_ENV
+
+          az vm create \
+            --resource-group "RG-Spoke-${SPOKE}-SBX" \
+            --name "$VM_NAME" \
+            --image Ubuntu2204 \
+            --admin-username azureuser \
+            --generate-ssh-keys
+
+      - name: Get Endpoint
+        shell: bash
+        run: |
+
+          TARGET=$(az vm show \
+            --resource-group "RG-Spoke-${SPOKE}-SBX" \
+            --name "$VM_NAME" \
+            --show-details \
+            --query privateIps \
+            -o tsv)
+
+          echo "TARGET=$TARGET" >> $GITHUB_ENV
+
+          echo "Endpoint: $TARGET"
 
       - name: Update Registry
         shell: bash
@@ -49,14 +68,14 @@ jobs:
 
           jq \
             --arg spoke "$SPOKE" \
-            --arg ip "${{ github.event.inputs.vm_ip }}" \
+            --arg ip "$TARGET" \
             '. + {
-                ($spoke): {
+               ($spoke): {
                   type: "vm",
                   ip: $ip
                 }
-              }' \
-            applications.json > tmp.json
+            }' \
+          applications.json > tmp.json
 
           mv tmp.json applications.json
 
@@ -65,84 +84,54 @@ jobs:
         run: |
 
           retry() {
+              local max=5
+              local delay=15
+              local attempt=1
 
-            local max=5
-            local delay=15
-            local attempt=1
+              while true; do
+                "$@" && return 0
+                if [ "$attempt" -ge "$max" ]; then
+                  echo "FAILED after $max attempts"
+                  return 1
+                fi
+                echo "Retry $attempt/$max"
+                attempt=$((attempt + 1))
+                sleep $delay
+              done
+            }
 
-            while true; do
+            echo "Registering:"
+            echo "${SPOKE}.dar.internal"
+            echo " -> ${TARGET}"
 
-              "$@" && return 0
+            retry az network private-dns record-set a create \
+              --resource-group RG-Hub-SBX \
+              --zone-name dar.internal \
+              --name "$SPOKE" || true
 
-              if [ "$attempt" -ge "$max" ]; then
-                echo "FAILED after $max attempts"
-                return 1
-              fi
+            retry az network private-dns record-set a update \
+              --resource-group RG-Hub-SBX \
+              --zone-name dar.internal \
+              --name "$SPOKE" \
+              --set aRecords=[] || true
 
-              echo "Retry $attempt/$max"
-
-              attempt=$((attempt + 1))
-
-              sleep $delay
-
-            done
-
-          }
-
-          TARGET="${{ github.event.inputs.vm_ip }}"
-
-          echo "Registering VM:"
-          echo "${SPOKE}.dar.internal"
-          echo " -> ${TARGET}"
-
-          #
-          # Create A record set
-          #
-          retry az network private-dns record-set a create \
-            --resource-group RG-Hub-SBX \
-            --zone-name dar.internal \
-            --name "$SPOKE" || true
-
-          #
-          # Remove existing A records
-          #
-          EXISTING=$(az network private-dns record-set a show \
-            --resource-group RG-Hub-SBX \
-            --zone-name dar.internal \
-            --name "$SPOKE" \
-            --query "arecords[].ipv4Address" \
-            -o tsv || true)
-
-          for ip in $EXISTING; do
-
-            retry az network private-dns record-set a remove-record \
+            retry az network private-dns record-set a add-record \
               --resource-group RG-Hub-SBX \
               --zone-name dar.internal \
               --record-set-name "$SPOKE" \
-              --ipv4-address "$ip" || true
+              --ipv4-address "$TARGET"
 
-          done
+      - name: Update Backend Pool
+        shell: bash
+        run: |
 
-          #
-          # Add new VM IP
-          #
-          retry az network private-dns record-set a add-record \
-            --resource-group RG-Hub-SBX \
-            --zone-name dar.internal \
-            --record-set-name "$SPOKE" \
-            --ipv4-address "$TARGET"
-
-          #
-          # Update App Gateway backend pool
-          #
-          retry az network application-gateway address-pool update \
-            --gateway-name agw-sbx \
-            --resource-group RG-Hub-SBX \
-            --name "${SPOKE}-pool" \
-            --servers "$TARGET"
+           retry az network application-gateway address-pool update \
+              --gateway-name agw-sbx \
+              --resource-group RG-Hub-SBX \
+              --name "${SPOKE}-pool" \
+              --servers "$TARGET"
 
       - name: Commit Registry
-        shell: bash
         run: |
 
           git config user.name github-actions
@@ -150,8 +139,6 @@ jobs:
 
           git add applications.json
 
-          git commit \
-            -m "Register VM for ${SPOKE}" \
-            || exit 0
+          git commit -m "Register application for $SPOKE" || exit 0
 
           git push
