@@ -1,61 +1,46 @@
 name: Create Spoke Repository
-
 on:
   workflow_dispatch:
     inputs:
-
       spoke_name:
         description: Spoke Name
         required: true
         type: string
-
 permissions:
   contents: read
-
 jobs:
-
   create-repository:
-
     runs-on: ubuntu-latest
-
     steps:
-
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Debug Secrets
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          if [ -z "$GH_TOKEN" ]; then
-            echo "Secret GH_PAT is empty or missing"
-          else
-            echo "Secret GH_PAT exists"
-          fi
-      - name: Debug GitHub Auth
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-            echo "Token present: $([ -n "$GH_TOKEN" ] && echo yes || echo no)"
-            gh auth status
-      - name: Check Secret
+      - name: Create Repository
         shell: bash
         env:
-            GH_TOKEN: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
 
-          if [ -z "$GH_TOKEN" ]; then
-            echo "GH_PAT is empty or missing"
+          SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
+
+          REPO="spoke-${SPOKE}"
+
+          echo "Checking repository: DAR-PT/${REPO}"
+
+          if gh repo view "DAR-PT/${REPO}" >/dev/null 2>&1
+          then
+
+            echo "Repository already exists"
+
             exit 1
+
           fi
-          echo "GH_PAT is present"
-      - name: Verify GitHub Auth
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
 
-          echo "Testing GitHub CLI"
+          echo "Creating repository from template..."
 
-          gh auth status
+          gh repo create "DAR-PT/${REPO}" \
+            --private \
+            --template "DAR-PT/LandingZoneTemplate"
 
-          gh repo view DAR-PT/LandingZoneTemplate
+          echo "Repository created successfully"
+
+          gh repo view "DAR-PT/${REPO}"
