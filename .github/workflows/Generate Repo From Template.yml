@@ -22,6 +22,15 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Debug Secrets
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "Secret GH_PAT is empty or missing"
+          else
+            echo "Secret GH_PAT exists"
+          fi
       - name: Debug GitHub Auth
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
