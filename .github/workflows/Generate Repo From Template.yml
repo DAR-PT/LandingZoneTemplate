@@ -14,48 +14,45 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      # update the workflow step env to use the repository secret
       - name: Create Repository
         shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.DAR_PAT }}
         run: |
-
           SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
-
           REPO="spoke-${SPOKE}"
-
           echo "Checking repository: DAR-PT/${REPO}"
 
           if gh repo view "DAR-PT/${REPO}" >/dev/null 2>&1
           then
-
             echo "Repository already exists"
-
             exit 1
-
           fi
 
           echo "Creating repository from template..."
-
+          
           gh repo create "DAR-PT/${REPO}" \
+            --template "DAR-PT/LandingZoneTemplate" \
             --private \
-            --clone=false
-            
-          git clone https://github.com/DAR-PT/LandingZoneTemplate.git template
-          git clone https://$GH_TOKEN@github.com/DAR-PT/${REPO}.git target
+            --clone=false || {
+              echo "gh repo create failed — printing authentication status and exiting"
+              gh auth status || true
+              exit 1
+              }
 
-          cp -R template/. target/
+          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/DAR-PT/${REPO}.git target
 
           cd target
-
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-          git add .
-          git commit -m "Initial spoke repository"
+          if git status --porcelain | grep -q .
+          then
+            git add .
+            git commit -m "Initial spoke repository"
+            git push origin main
+          fi
 
-          git push origin main
-          
           echo "Repository created successfully"
-
           gh repo view "DAR-PT/${REPO}"
