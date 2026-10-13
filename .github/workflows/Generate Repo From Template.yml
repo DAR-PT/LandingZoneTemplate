@@ -14,19 +14,24 @@ permissions:
 jobs:
   create-repository:
     runs-on: ubuntu-latest
+    # Set GH_TOKEN here so the gh CLI can authenticate
     env:
       GH_TOKEN: ${{ secrets.DAR_PAT }}
-      GITHUB_TOKEN: ${{ secrets.DAR_PAT }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Authenticate gh (optional, makes auth explicit)
+        shell: bash
+        run: |
+          # Ensure gh will be authenticated. This uses GH_TOKEN from the job env.
+          echo "${GH_TOKEN}" | gh auth login --with-token
 
       - name: Create Repository
         shell: bash
         run: |
           SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
           REPO="spoke-${SPOKE}"
-
           echo "Checking repository: DAR-PT/${REPO}"
 
           if gh repo view "DAR-PT/${REPO}" >/dev/null 2>&1
@@ -46,7 +51,6 @@ jobs:
             }
 
           git clone "https://x-access-token:${GH_TOKEN}@github.com/DAR-PT/${REPO}.git" target
-
           cd target
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
