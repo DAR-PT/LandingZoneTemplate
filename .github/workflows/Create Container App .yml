@@ -1,19 +1,7 @@
-name: Register Container App
+name: Create Container App
 
 on:
   workflow_dispatch:
-    inputs:
-
-      spoke_name:
-        description: Spoke Name
-        required: true
-        type: string
-
-      container_app_fqdn:
-        description: Container App FQDN
-        required: true
-        type: string
-
 permissions:
   id-token: write
   contents: write
@@ -33,60 +21,75 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
+      - name: Create Container App
+        shell: bash
+        run: |
+          SPOKE="${GITHUB_REPOSITORY#*/}"
+          SPOKE="${SPOKE#spoke-}"
+          echo "SPOKE=$SPOKE" >> $GITHUB_ENV
+          
+          APP_NAME="${SPOKE}-app"
+          echo "APP_NAME=$APP_NAME" >> $GITHUB_ENV
+          
+          az containerapp create \
+            --name "$APP_NAME" \
+            --resource-group "RG-Spoke-${SPOKE}-SBX" \
+            --environment "cae-shared-sbx}" \
+            --image "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest" \
+            --target-port 80 \
+            --ingress external
+            
+      - name: Get Endpoint
+        shell: bash
+        run: |     
+          TARGET=$(az containerapp show \
+            --name "$APP_NAME" \
+            --resource-group "RG-Spoke-${SPOKE}-SBX" \
+            --query properties.configuration.ingress.fqdn \
+            -o tsv)
+            
+           echo "TARGET=$TARGET" >> $GITHUB_ENV
+           echo "Endpoint: $TARGET" 
+           
       - name: Update Registry
         shell: bash
         run: |
-
-          SPOKE="${{ github.event.inputs.spoke_name }}"
-          FQDN="${{ github.event.inputs.container_fqdn }}"
-
           if [ ! -f applications.json ]; then
             echo '{}' > applications.json
           fi
-
+          
           jq \
             --arg spoke "$SPOKE" \
-            --arg fqdn "$FQDN" \
+            --arg fqdn "$TARGET" \
             '. + {
-                ($spoke): {
+               ($spoke): {
                   type: "containerapp",
                   fqdn: $fqdn
                 }
-              }' \
-            applications.json > tmp.json
-
+            }' \
+            
+          applications.json > tmp.json
           mv tmp.json applications.json
           
       - name: Register Container App
         shell: bash
         run: |
-
           retry() {
               local max=5
               local delay=15
               local attempt=1
 
               while true; do
-
-              "$@" && return 0
-
-              if [ "$attempt" -ge "$max" ]; then
-                echo "FAILED after $max attempts"
-                return 1
-              fi
-
-              echo "Retry $attempt/$max"
-              attempt=$((attempt + 1))
-
-              sleep $delay
-
+                "$@" && return 0
+                if [ "$attempt" -ge "$max" ]; then
+                  echo "FAILED after $max attempts"
+                  return 1
+                fi
+                echo "Retry $attempt/$max"
+                attempt=$((attempt + 1))
+                sleep $delay
               done
             }
-
-            SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
-
-            TARGET="${{ github.event.inputs.container_app_fqdn }}"
             
             TARGET=$(echo "$TARGET" \
               | sed 's|^https://||' \
@@ -107,7 +110,10 @@ jobs:
               --zone-name dar.internal \
               --record-set-name "$SPOKE" \
               --cname "$TARGET"
-
+              
+      - name: Update Backend Pool
+        shell: bash
+        run: |
            retry az network application-gateway address-pool update \
               --gateway-name agw-sbx \
               --resource-group RG-Hub-SBX \
@@ -119,9 +125,6 @@ jobs:
 
           git config user.name github-actions
           git config user.email github-actions@github.com
-
           git add applications.json
-
           git commit -m "Register application for ${{ github.event.inputs.spoke_name }}" || exit 0
-
           git push
