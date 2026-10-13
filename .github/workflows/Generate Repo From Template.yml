@@ -22,7 +22,17 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Check Secret
+        shell: bash
+        env:
+            GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
 
+          if [ -z "$GH_TOKEN" ]; then
+            echo "GH_PAT is empty or missing"
+            exit 1
+          fi
+          echo "GH_PAT is present"
       - name: Verify GitHub Auth
         shell: bash
         env:
