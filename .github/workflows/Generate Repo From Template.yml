@@ -39,8 +39,23 @@ jobs:
 
           gh repo create "DAR-PT/${REPO}" \
             --private \
-            --template "DAR-PT/LandingZoneTemplate"
+            --clone=false
+            
+          git clone https://github.com/DAR-PT/LandingZoneTemplate.git template
+          git clone https://$GH_TOKEN@github.com/DAR-PT/${REPO}.git target
 
+          cp -R template/. target/
+
+          cd target
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add .
+          git commit -m "Initial spoke repository"
+
+          git push origin main
+          
           echo "Repository created successfully"
 
           gh repo view "DAR-PT/${REPO}"
