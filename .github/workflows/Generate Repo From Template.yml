@@ -1,4 +1,5 @@
 name: Create Spoke Repository
+
 on:
   workflow_dispatch:
     inputs:
@@ -6,22 +7,26 @@ on:
         description: Spoke Name
         required: true
         type: string
+
 permissions:
   contents: write
+
 jobs:
   create-repository:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.DAR_PAT }}
+      GITHUB_TOKEN: ${{ secrets.DAR_PAT }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      # update the workflow step env to use the repository secret
+
       - name: Create Repository
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.DAR_PAT }}
         run: |
           SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
           REPO="spoke-${SPOKE}"
+
           echo "Checking repository: DAR-PT/${REPO}"
 
           if gh repo view "DAR-PT/${REPO}" >/dev/null 2>&1
@@ -31,7 +36,6 @@ jobs:
           fi
 
           echo "Creating repository from template..."
-          
           gh repo create "DAR-PT/${REPO}" \
             --template "DAR-PT/LandingZoneTemplate" \
             --private \
@@ -39,9 +43,9 @@ jobs:
               echo "gh repo create failed — printing authentication status and exiting"
               gh auth status || true
               exit 1
-              }
+            }
 
-          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/DAR-PT/${REPO}.git target
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/DAR-PT/${REPO}.git" target
 
           cd target
           git config user.name "github-actions"
@@ -51,7 +55,7 @@ jobs:
           then
             git add .
             git commit -m "Initial spoke repository"
-            git push origin main
+            git push origin HEAD:main || git push origin HEAD:master
           fi
 
           echo "Repository created successfully"
