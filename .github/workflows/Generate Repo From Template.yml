@@ -33,6 +33,12 @@ jobs:
             exit 1
           fi
           echo "GH_PAT is present"
+      - name: Debug GitHub Auth
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+            echo "Token present: $([ -n "$GH_TOKEN" ] && echo yes || echo no)"
+            gh auth status
       - name: Verify GitHub Auth
         shell: bash
         env:
