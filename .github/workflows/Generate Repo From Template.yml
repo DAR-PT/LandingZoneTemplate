@@ -23,33 +23,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create Repository
+      - name: Verify GitHub Auth
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
 
-          SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
+          echo "Testing GitHub CLI"
 
-          REPO="spoke-${SPOKE}"
+          gh auth status
 
-          echo "Checking repository: DAR-PT/${REPO}"
-
-          if gh repo view "DAR-PT/${REPO}" >/dev/null 2>&1
-          then
-
-            echo "Repository already exists"
-
-            exit 1
-
-          fi
-
-          echo "Creating repository from template..."
-
-          gh repo create "DAR-PT/${REPO}" \
-            --private \
-            --template "DAR-PT/LandingZoneTemplate"
-
-          echo "Repository created successfully"
-
-          gh repo view "DAR-PT/${REPO}"
+          gh repo view DAR-PT/LandingZoneTemplate
