@@ -67,10 +67,10 @@ jobs:
          spoke=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
          
          terraform init -reconfigure \
-          -backend-config="resource_group_name=RG-Platform-SBX" \
-          -backend-config="storage_account_name=stplatformtfstate" \
+          -backend-config="resource_group_name=RG-Core-SBX" \
+          -backend-config="storage_account_name=coresbxstorageaccount" \
           -backend-config="container_name=tfstate" \
-          -backend-config="key=spokes/${spoke}.tfstate"
+          -backend-config="key=${spoke}.tfstate"
       - name: Terraform Validate
         run: terraform validate
       - name: Terraform Plan
