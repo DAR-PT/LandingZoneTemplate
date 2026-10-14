@@ -27,29 +27,32 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
+          SPOKE_INPUT: ${{ inputs.spoke_name }}
         run: |
-
-          SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
-
+          set -euo pipefail
+          SPOKE=$(echo "$SPOKE_INPUT" | tr '[:upper:]' '[:lower:]')
           REPO="spoke-${SPOKE}"
 
           echo "Checking repository: DAR-PT/${REPO}"
-
-          if gh repo view "DAR-PT/${REPO}" >/dev/null 2>&1
-          then
-
-            echo "Repository already exists"
-
-            exit 1
-
+          if gh api "repos/DAR-PT/${REPO}" >/dev/null 2>&1; then
+            echo "Repository already exists"; exit 1
           fi
 
           echo "Creating repository from template..."
+          gh api -X POST repos/DAR-PT/LandingZoneTemplate/generate \
+            -f owner=DAR-PT \
+            -f name="${REPO}" \
+            -F private=true \
+            -F include_all_branches=false \
+            -f description="Spoke ${SPOKE}"
 
-          gh repo create "DAR-PT/${REPO}" \
-            --private \
-            --template "DAR-PT/LandingZoneTemplate"
-
-          echo "Repository created successfully"
+          # generation is async; wait until the default branch exists
+          for i in {1..20}; do
+            if gh api "repos/DAR-PT/${REPO}/commits?per_page=1" >/dev/null 2>&1; then
+              echo "Repository ready"; break
+            fi
+            sleep 3
+          done
 
           gh repo view "DAR-PT/${REPO}"
+ 
