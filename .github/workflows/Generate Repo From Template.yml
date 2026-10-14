@@ -21,30 +21,34 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Show GH Identity
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          gh auth status
-
-          gh api user
+        uses: actions/checkout@v4  
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
       - name: Create Repository
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           SPOKE_INPUT: ${{ inputs.spoke_name }}
         run: |
           set -euo pipefail
+
           SPOKE=$(echo "$SPOKE_INPUT" | tr '[:upper:]' '[:lower:]')
           REPO="spoke-${SPOKE}"
 
           echo "Checking repository: DAR-PT/${REPO}"
-          if gh api "repos/DAR-PT/${REPO}" >/dev/null 2>&1; then
-            echo "Repository already exists"; exit 1
-          fi
 
+          if gh api "repos/DAR-PT/${REPO}" >/dev/null 2>&1; then
+            echo "Repository already exists"
+            exit 1
+          fi
+          
           echo "Creating repository from template..."
           echo "Creating empty repository..."
             gh api \
@@ -91,5 +95,18 @@ jobs:
             sleep 3
           done
 
+          gh secret set AZURE_CLIENT_ID \
+            --repo "DAR-PT/${REPO}" \
+            --body "$AZURE_CLIENT_ID"
+
+          gh secret set AZURE_TENANT_ID \
+            --repo "DAR-PT/${REPO}" \
+            --body "$AZURE_TENANT_ID"
+
+          gh secret set AZURE_SUBSCRIPTION_ID \
+            --repo "DAR-PT/${REPO}" \
+            --body "$AZURE_SUBSCRIPTION_ID"
+            
           gh repo view "DAR-PT/${REPO}"
+          
  
