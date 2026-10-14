@@ -47,22 +47,11 @@ jobs:
 
           echo "Creating repository from template..."
           echo "Creating empty repository..."
-          
-          echo "Auth status:"
-          gh auth status
-
-          echo "Current user:"
-          gh api user --jq .login
-
-          gh api user/installations
-
-          gh api user
-          
-          gh api \
-            --method POST \
-            orgs/DAR-PT/repos \
-            -f name="test-api-create" \
-            -F private=true
+            gh api \
+              --method POST \
+              orgs/DAR-PT/repos \
+              -f name="${REPO}" \
+              -F private=true
 
           echo "Cloning repositories..."
 
