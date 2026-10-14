@@ -32,7 +32,7 @@ jobs:
           echo "spoke=$spoke" >> $GITHUB_ENV
           
           ACCOUNT_KEY=$(az storage account keys list \
-            --resource-group RG-Hub-SBX \
+            --resource-group RG-Core-SBX \
             --account-name coresbxstorageaccount \
             --query "[0].value" \
             -o tsv)
@@ -40,7 +40,7 @@ jobs:
           az storage blob download \
             --account-name coresbxstorageaccount \
             --account-key "$ACCOUNT_KEY" \
-            --container-name platform \
+            --container-name spokeregcontainer \
             --name spokes.json \
             --file spokes.json
             
