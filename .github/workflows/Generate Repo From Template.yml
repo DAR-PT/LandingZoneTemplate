@@ -47,7 +47,13 @@ jobs:
 
           echo "Creating repository from template..."
           echo "Creating empty repository..."
+          
+          echo "Auth status:"
+          gh auth status
 
+          echo "Current user:"
+          gh api user --jq .login
+          
           gh repo create "DAR-PT/${REPO}" \
             --private \
             --clone=false
