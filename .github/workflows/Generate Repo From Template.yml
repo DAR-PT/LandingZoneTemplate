@@ -39,12 +39,41 @@ jobs:
           fi
 
           echo "Creating repository from template..."
-          gh api -X POST repos/DAR-PT/LandingZoneTemplate/generate \
-            -f owner=DAR-PT \
-            -f name="${REPO}" \
-            -F private=true \
-            -F include_all_branches=false \
-            -f description="Spoke ${SPOKE}"
+          echo "Creating empty repository..."
+
+          gh repo create "DAR-PT/${REPO}" \
+            --private \
+            --clone=false
+
+          echo "Cloning repositories..."
+
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/DAR-PT/LandingZoneTemplate.git" template
+
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/DAR-PT/${REPO}.git" target
+
+          echo "Copying template contents..."
+
+          rsync -av \
+            --exclude='.git' \
+            template/ \
+            target/
+
+          echo "Removing platform workflows..."
+          rm -f target/.github/workflows/DeleteSpokes.yml
+          rm -f target/.github/workflows/ClearSpokes.yml
+          
+          echo "Publishing repository..."
+          cd target
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "Initial spoke repository"
+          git push origin main
+
+          echo "Repository created successfully"
+
+          gh repo view "DAR-PT/${REPO}"
 
           # generation is async; wait until the default branch exists
           for i in {1..20}; do
