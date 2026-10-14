@@ -24,10 +24,26 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
       - name: Allocate spoke Index
         shell: bash
         run: |
           spoke=$(basename "$GITHUB_REPOSITORY" | sed 's/^spoke-//')
+          echo "spoke=$spoke" >> $GITHUB_ENV
+          
+          ACCOUNT_KEY=$(az storage account keys list \
+            --resource-group RG-Hub-SBX \
+            --account-name coresbxstorageaccount \
+            --query "[0].value" \
+            -o tsv)
+
+          az storage blob download \
+            --account-name coresbxstorageaccount \
+            --account-key "$ACCOUNT_KEY" \
+            --container-name platform \
+            --name spokes.json \
+            --file spokes.json
+            
           if [ ! -f spokes.json ]; then
             echo '{}' > spokes.json
           fi
@@ -59,14 +75,13 @@ jobs:
           echo "Allocated spoke index: $NEXT" 
           
       - name: Terraform Init
-        run: |
-         spoke=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
-         
+        run: |    
          terraform init -reconfigure \
           -backend-config="resource_group_name=RG-Core-SBX" \
           -backend-config="storage_account_name=coresbxstorageaccount" \
           -backend-config="container_name=tfstate" \
           -backend-config="key=${spoke}.tfstate"
+          
       - name: Terraform Validate
         run: terraform validate
       - name: Terraform Plan
@@ -77,7 +92,6 @@ jobs:
       - name: Create App Gateway Objects
         shell: bash
         run: |
-          spoke=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
           INDEX=$(jq -r --arg s "$spoke" '.[$s]' spokes.json)
           PRIORITY=$((100 + INDEX))
 
@@ -135,8 +149,10 @@ jobs:
             
       - name: Commit Allocation Registry
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add spokes.json
-          git commit -m "Add spoke ${{ github.event.inputs.spoke_name }}" || exit 0
-          git push
+         az storage blob upload \
+          --overwrite true \
+          --account-name coresbxstorageaccount \
+          --account-key "$ACCOUNT_KEY" \
+          --container-name platform \
+          --name spokes.json \
+          --file spokes.json
