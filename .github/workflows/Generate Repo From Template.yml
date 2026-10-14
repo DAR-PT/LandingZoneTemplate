@@ -108,5 +108,23 @@ jobs:
             --body "$AZURE_SUBSCRIPTION_ID"
             
           gh repo view "DAR-PT/${REPO}"
+
+          echo "Creating federated credential..."
+
+          cat > federated-credential.json <<EOF
+          {
+            "name": "spoke-${SPOKE}",
+            "issuer": "https://token.actions.githubusercontent.com",
+            "subject": "repo:DAR-PT/${REPO}:ref:refs/heads/main",
+            "description": "OIDC for ${REPO}",
+            "audiences": [
+              "api://AzureADTokenExchange"
+            ]
+          }
+          EOF
+
+          az ad app federated-credential create \
+            --id "$AZURE_CLIENT_ID" \
+            --parameters federated-credential.json
           
  
