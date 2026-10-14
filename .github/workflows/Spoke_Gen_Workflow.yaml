@@ -2,10 +2,6 @@ name: Create spoke
 on:
   workflow_dispatch:
     inputs:
-      spoke_name:
-        description: spoke name
-        required: true
-        type: string
       keepalive:
         description: spoke Persistence
         required: false
@@ -31,7 +27,7 @@ jobs:
       - name: Allocate spoke Index
         shell: bash
         run: |
-          spoke=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
+          spoke=$(basename "$GITHUB_REPOSITORY" | sed 's/^spoke-//')
           if [ ! -f spokes.json ]; then
             echo '{}' > spokes.json
           fi
