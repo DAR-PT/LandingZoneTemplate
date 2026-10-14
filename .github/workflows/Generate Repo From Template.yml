@@ -22,7 +22,14 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Show GH Identity
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          gh auth status
 
+          gh api user
       - name: Create Repository
         shell: bash
         env:
