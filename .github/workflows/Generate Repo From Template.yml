@@ -58,9 +58,11 @@ jobs:
 
           gh api user
           
-          gh repo create "DAR-PT/${REPO}" \
-            --private \
-            --clone=false
+          gh api \
+            --method POST \
+            orgs/DAR-PT/repos \
+            -f name="test-api-create" \
+            -F private=true
 
           echo "Cloning repositories..."
 
