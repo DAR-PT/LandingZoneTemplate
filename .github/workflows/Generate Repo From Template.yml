@@ -53,6 +53,10 @@ jobs:
 
           echo "Current user:"
           gh api user --jq .login
+
+          gh api user/installations
+
+          gh api user
           
           gh repo create "DAR-PT/${REPO}" \
             --private \
