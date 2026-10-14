@@ -3,64 +3,53 @@ name: Create Spoke Repository
 on:
   workflow_dispatch:
     inputs:
+
       spoke_name:
         description: Spoke Name
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+
   create-repository:
+
     runs-on: ubuntu-latest
-    # Set GH_TOKEN here so the gh CLI can authenticate
-    env:
-      GH_TOKEN: ${{ secrets.DAR_PAT }}
+
     steps:
+
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Authenticate gh (optional, makes auth explicit)
-        shell: bash
-        run: |
-          # Ensure gh will be authenticated. This uses GH_TOKEN from the job env.
-          echo "${GH_TOKEN}" | gh auth login --with-token
-
       - name: Create Repository
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
+
           SPOKE=$(echo "${{ github.event.inputs.spoke_name }}" | tr '[:upper:]' '[:lower:]')
+
           REPO="spoke-${SPOKE}"
+
           echo "Checking repository: DAR-PT/${REPO}"
 
           if gh repo view "DAR-PT/${REPO}" >/dev/null 2>&1
           then
+
             echo "Repository already exists"
+
             exit 1
+
           fi
 
           echo "Creating repository from template..."
+
           gh repo create "DAR-PT/${REPO}" \
-            --template "DAR-PT/LandingZoneTemplate" \
             --private \
-            --clone=false || {
-              echo "gh repo create failed — printing authentication status and exiting"
-              gh auth status || true
-              exit 1
-            }
-
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/DAR-PT/${REPO}.git" target
-          cd target
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-
-          if git status --porcelain | grep -q .
-          then
-            git add .
-            git commit -m "Initial spoke repository"
-            git push origin HEAD:main || git push origin HEAD:master
-          fi
+            --template "DAR-PT/LandingZoneTemplate"
 
           echo "Repository created successfully"
+
           gh repo view "DAR-PT/${REPO}"
