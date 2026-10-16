@@ -1,4 +1,4 @@
-name: Create spoke
+name: Create spoke with Container App
 on:
   workflow_dispatch:
     inputs:
