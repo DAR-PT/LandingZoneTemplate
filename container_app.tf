@@ -1,5 +1,5 @@
 data "azurerm_container_app_environment" "shared" {
-  name                = "cappenv-shared-sbx"
+  name                = "cae-shared-sbx"
   resource_group_name = "RG-Hub-SBX"
 }
 
