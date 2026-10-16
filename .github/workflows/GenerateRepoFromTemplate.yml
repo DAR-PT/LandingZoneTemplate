@@ -1,0 +1,109 @@
+name: Create Spoke Repository
+
+on:
+  workflow_dispatch:
+    inputs:
+
+      spoke_name:
+        description: Spoke Name
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+jobs:
+
+  create-repository:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4  
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          
+      - name: Create Repository
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          SPOKE_INPUT: ${{ inputs.spoke_name }}
+        run: |
+          set -euo pipefail
+
+          SPOKE=$(echo "$SPOKE_INPUT" | tr '[:upper:]' '[:lower:]')
+          REPO="spoke-${SPOKE}"
+
+          echo "Checking repository: DAR-PT/${REPO}"
+
+          if gh api "repos/DAR-PT/${REPO}" >/dev/null 2>&1; then
+            echo "Repository already exists"
+            exit 1
+          fi
+          
+          echo "Creating repository from template..."
+          echo "Creating empty repository..."
+            gh api \
+              --method POST \
+              orgs/DAR-PT/repos \
+              -f name="${REPO}" \
+              -F private=true
+
+          echo "Cloning repositories..."
+
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/DAR-PT/LandingZoneTemplate.git" template
+
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/DAR-PT/${REPO}.git" target
+
+          echo "Copying template contents..."
+
+          rsync -av \
+            --exclude='.git' \
+            template/ \
+            target/
+
+          echo "Removing platform workflows..."
+          rm -f target/.github/workflows/ClearSpokes.yml
+          rm -f target/.github/workflows/GenerateRepoFromTemplate.yml
+          echo "Publishing repository..."
+          cd target
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "Initial spoke repository"
+          git push origin main
+
+          echo "Repository created successfully"
+
+          gh repo view "DAR-PT/${REPO}"
+
+          # generation is async; wait until the default branch exists
+          for i in {1..20}; do
+            if gh api "repos/DAR-PT/${REPO}/commits?per_page=1" >/dev/null 2>&1; then
+              echo "Repository ready"; break
+            fi
+            sleep 3
+          done
+
+          gh secret set AZURE_CLIENT_ID \
+            --repo "DAR-PT/${REPO}" \
+            --body "$AZURE_CLIENT_ID"
+
+          gh secret set AZURE_TENANT_ID \
+            --repo "DAR-PT/${REPO}" \
+            --body "$AZURE_TENANT_ID"
+
+          gh secret set AZURE_SUBSCRIPTION_ID \
+            --repo "DAR-PT/${REPO}" \
+            --body "$AZURE_SUBSCRIPTION_ID"
+            
+          gh repo view "DAR-PT/${REPO}"
