@@ -225,6 +225,6 @@ jobs:
               --overwrite true \
               --account-name coresbxstorageaccount \
               --account-key "$ACCOUNT_KEY" \
-              --container-name platform \
+              --container-name spokeregcontainer \
               --name spokes.json \
               --file spokes.json
