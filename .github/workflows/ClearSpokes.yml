@@ -146,13 +146,15 @@ jobs:
               --name "$RG" \
               --yes \
               --no-wait
-              
+             
             ACCOUNT_KEY=$(az storage account keys list \
               --resource-group RG-Core-SBX \
               --account-name coresbxstorageaccount \
               --query "[0].value" \
               -o tsv)
-
+              
+            echo "ACCOUNT_KEY=$ACCOUNT_KEY" >> $GITHUB_ENV  
+            
             az storage blob download \
               --account-name coresbxstorageaccount \
               --account-key "$ACCOUNT_KEY" \
