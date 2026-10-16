@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   build:
@@ -30,8 +31,8 @@ jobs:
         if: steps.container.outputs.available == 'true'
         uses: docker/setup-buildx-action@v3
 
-      - name: Build container image
-        if: steps.container.outputs.available == 'true'
+      - name: Build container image for pull request
+        if: steps.container.outputs.available == 'true' && github.event_name == 'pull_request'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -39,3 +40,26 @@ jobs:
           load: true
           push: false
           tags: landing-zone-template:${{ github.sha }}
+
+      - name: Log in to Azure
+        if: steps.container.outputs.available == 'true' && github.event_name != 'pull_request'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Log in to Azure Container Registry
+        if: steps.container.outputs.available == 'true' && github.event_name != 'pull_request'
+        run: az acr login --name coresbxacr
+
+      - name: Upload container to Azure Container Registry
+        if: steps.container.outputs.available == 'true' && github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            coresbxacr.azurecr.io/landing-zone-template:${{ github.sha }}
+            coresbxacr.azurecr.io/landing-zone-template:latest
