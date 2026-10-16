@@ -1,0 +1,41 @@
+name: Build Container
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Check for Dockerfile
+        id: container
+        shell: bash
+        run: |
+          if [ -f Dockerfile ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Container build skipped: no root Dockerfile is present."
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.container.outputs.available == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image
+        if: steps.container.outputs.available == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          load: true
+          push: false
+          tags: landing-zone-template:${{ github.sha }}
