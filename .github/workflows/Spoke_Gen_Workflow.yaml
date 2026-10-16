@@ -92,6 +92,19 @@ jobs:
       - name: Create App Gateway Objects
         shell: bash
         run: |
+          set -euo pipefail
+
+          APP_FQDN=$(az containerapp show \
+            --name "${spoke}-app" \
+            --resource-group "RG-Spoke-${spoke}-SBX" \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+
+          if [ -z "$APP_FQDN" ] || [ "$APP_FQDN" = "null" ]; then
+            echo "::error::Could not retrieve the Container App FQDN."
+            exit 1
+          fi
+
           INDEX=$(jq -r --arg s "$spoke" '.[$s]' spokes.json)
           PRIORITY=$((100 + INDEX))
 
@@ -118,7 +131,7 @@ jobs:
             --gateway-name agw-sbx \
             --resource-group RG-Hub-SBX \
             --name "${spoke}-pool" \
-            --servers "${spoke}.dar.internal"
+            --servers "$APP_FQDN"
 
           retry_az az network application-gateway http-settings create \
             --gateway-name agw-sbx \

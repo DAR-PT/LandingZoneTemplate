@@ -1,0 +1,101 @@
+name: Update Container App Routing
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  refresh-routes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get Container App FQDN
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SPOKE="${GITHUB_REPOSITORY##*/}"
+          SPOKE="${SPOKE#spoke-}"
+          SPOKE="$(printf '%s' "$SPOKE" | tr '[:upper:]' '[:lower:]')"
+          APP_FQDN=$(az containerapp show \
+            --name "${SPOKE}-app" \
+            --resource-group "RG-Spoke-${SPOKE}-SBX" \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+
+          if [ -z "$APP_FQDN" ] || [ "$APP_FQDN" = "null" ]; then
+            echo "::error::Could not retrieve the Container App FQDN."
+            exit 1
+          fi
+
+          echo "SPOKE=$SPOKE" >> "$GITHUB_ENV"
+          echo "APP_FQDN=$APP_FQDN" >> "$GITHUB_ENV"
+
+      - name: Update private DNS CNAME
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! az network private-dns record-set cname show \
+            --resource-group RG-Hub-SBX \
+            --zone-name dar.internal \
+            --name "$SPOKE" \
+            --output none 2>/dev/null; then
+            az network private-dns record-set cname create \
+              --resource-group RG-Hub-SBX \
+              --zone-name dar.internal \
+              --name "$SPOKE"
+          fi
+
+          az network private-dns record-set cname set-record \
+            --resource-group RG-Hub-SBX \
+            --zone-name dar.internal \
+            --record-set-name "$SPOKE" \
+            --cname "$APP_FQDN"
+
+      - name: Update Application Gateway backend pool
+        shell: bash
+        run: |
+          set -euo pipefail
+          az network application-gateway address-pool update \
+            --gateway-name agw-sbx \
+            --resource-group RG-Hub-SBX \
+            --name "${SPOKE}-pool" \
+            --servers "$APP_FQDN"
+
+      - name: Update application registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f applications.json ]; then
+            echo '{}' > applications.json
+          fi
+
+          jq \
+            --arg spoke "$SPOKE" \
+            --arg fqdn "$APP_FQDN" \
+            '. + {($spoke): ((.[$spoke] // {}) + {type: "containerapp", fqdn: $fqdn})}' \
+            applications.json > applications.tmp.json
+          mv applications.tmp.json applications.json
+
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add applications.json
+          if git diff --cached --quiet; then
+            echo "Application registry is already up to date."
+          else
+            git commit -m "Update Container App endpoint for ${SPOKE}"
+            git push
+          fi
