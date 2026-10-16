@@ -4,4 +4,6 @@ locals {
     10,
     var.spoke_index
   )
+
+  app_fqdn = azurerm_container_app.spoke.latest_revision_fqdn
 }

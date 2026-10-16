@@ -31,3 +31,11 @@ resource "azurerm_container_app" "spoke" {
     }
   }
 }
+
+resource "azurerm_private_dns_cname_record" "spoke_app" {
+  name                = lower(var.spoke_name)
+  zone_name           = data.azurerm_private_dns_zone.spokes.name
+  resource_group_name = "RG-Hub-SBX"
+  ttl                 = 300
+  record              = local.app_fqdn
+}
