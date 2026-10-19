@@ -1,0 +1,279 @@
+name: Rehydrate_Spoke
+
+on:
+  workflow_dispatch:
+   inputs:
+      keepalive:
+        description: keepalive
+        required: false
+        default: "false"
+        type: string
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  reapply-spoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Prepare Spoke Variables
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          repo_name="${GITHUB_REPOSITORY##*/}"
+          if [[ "$repo_name" != spoke-* ]]; then
+            echo "::error::Run this workflow from a generated spoke repository named spoke-<name>."
+            exit 1
+          fi
+          spoke="${repo_name#spoke-}"
+          if [[ -z "$spoke" ]]; then
+            echo "::error::Could not determine the spoke name from the repository."
+            exit 1
+          fi
+          echo "SPOKE=$spoke" >> "$GITHUB_ENV"
+
+          account_key=$(az storage account keys list \
+            --resource-group RG-Core-SBX \
+            --account-name coresbxstorageaccount \
+            --query "[0].value" \
+            --output tsv)
+
+          registry_lease_id=$(python3 -c 'import uuid; print(uuid.uuid4())')
+          lease_acquired=false
+          for attempt in {1..12}; do
+            if az storage blob lease acquire \
+              --account-name coresbxstorageaccount \
+              --account-key "$account_key" \
+              --container-name spokeregcontainer \
+              --blob-name spokes.json \
+              --lease-duration 60 \
+              --proposed-lease-id "$registry_lease_id" \
+              --output none; then
+              lease_acquired=true
+              break
+            fi
+            echo "Registry is locked; retrying lease acquisition ($attempt/12)."
+            sleep 5
+          done
+          if [[ "$lease_acquired" != "true" ]]; then
+            echo "::error::Could not acquire a lease on the spoke registry."
+            exit 1
+          fi
+
+          release_registry_lease() {
+            if [[ "$lease_acquired" != "true" ]]; then
+              return 0
+            fi
+            if ! az storage blob lease release \
+              --account-name coresbxstorageaccount \
+              --account-key "$account_key" \
+              --container-name spokeregcontainer \
+              --blob-name spokes.json \
+              --lease-id "$registry_lease_id" \
+              --output none; then
+              return 1
+            fi
+            lease_acquired=false
+          }
+          trap 'if ! release_registry_lease; then echo "::error::Could not release the spoke registry lease."; exit 1; fi' EXIT
+
+          az storage blob download \
+            --account-name coresbxstorageaccount \
+            --account-key "$account_key" \
+            --container-name spokeregcontainer \
+            --name spokes.json \
+            --file spokes.json \
+            --lease-id "$registry_lease_id"
+
+          if jq -e --arg spoke "$spoke" 'has($spoke)' spokes.json >/dev/null; then
+            echo "Spoke $spoke already exists in the registry; skipping rehydrate."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          state_exists=$(az storage blob exists \
+            --account-name coresbxstorageaccount \
+            --account-key "$account_key" \
+            --container-name tfstate \
+            --name "${spoke}.tfstate" \
+            --query exists \
+            --output tsv)
+          if [[ "$state_exists" != "true" ]]; then
+            echo "::error::Terraform state blob tfstate/${spoke}.tfstate was not found."
+            exit 1
+          fi
+
+          keepalive="${{ github.event.inputs.keepalive }}"
+
+          spoke_index=$(jq -er '
+            [.[]] as $used
+            | first(
+                range(1;1025)
+                | select(. as $i | ($used | index($i)) | not)
+              )
+          ' spokes.json)
+
+          jq \
+            --arg spoke "$spoke" \
+            --argjson idx "$spoke_index" \
+            '. + {($spoke): $idx}' \
+            spokes.json > spokes.tmp.json
+          mv spokes.tmp.json spokes.json
+
+          az storage blob upload \
+            --overwrite true \
+            --account-name coresbxstorageaccount \
+            --account-key "$account_key" \
+            --container-name spokeregcontainer \
+            --name spokes.json \
+            --file spokes.json \
+            --lease-id "$registry_lease_id"
+
+          if ! release_registry_lease; then
+            echo "::error::Could not release the spoke registry lease."
+            exit 1
+          fi
+          trap - EXIT
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "SPOKE_INDEX=$spoke_index" >> "$GITHUB_ENV"
+
+          jq -n \
+            --arg spoke_name "$spoke" \
+            --argjson spoke_index "$spoke_index" \
+            --arg keepAlive "$keepalive" \
+            '{spoke_name: $spoke_name, spoke_index: $spoke_index, keepAlive: $keepAlive}' \
+            > terraform.auto.tfvars.json
+
+      - name: Terraform Init
+        if: steps.prepare.outputs.skip != 'true'
+        run: |
+          terraform init -reconfigure \
+            -backend-config="resource_group_name=RG-Core-SBX" \
+            -backend-config="storage_account_name=coresbxstorageaccount" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=${SPOKE}.tfstate"
+        shell: bash
+
+      - name: Terraform Validate
+        if: steps.prepare.outputs.skip != 'true'
+        run: terraform validate
+
+      - name: Terraform Plan
+        if: steps.prepare.outputs.skip != 'true'
+        run: terraform plan -input=false
+
+      - name: Terraform Apply
+        if: steps.prepare.outputs.skip != 'true'
+        run: terraform apply -auto-approve -input=false
+
+      - name: Reconcile Application Gateway Objects
+        if: steps.prepare.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          app_fqdn=$(az containerapp show \
+            --name "${SPOKE}-app" \
+            --resource-group "RG-Spoke-${SPOKE}-SBX" \
+            --query properties.configuration.ingress.fqdn \
+            --output tsv)
+          if [[ -z "$app_fqdn" || "$app_fqdn" == "null" ]]; then
+            echo "::error::Could not retrieve the Container App FQDN."
+            exit 1
+          fi
+
+          spoke_index=$(jq -er --arg spoke "$SPOKE" \
+            '.[$spoke] | select(type == "number")' spokes.json)
+          priority=$((100 + spoke_index))
+
+          gateway_args=(--gateway-name agw-sbx --resource-group RG-Hub-SBX)
+
+          if az network application-gateway address-pool show \
+            "${gateway_args[@]}" --name "${SPOKE}-pool" --output none 2>/dev/null; then
+            az network application-gateway address-pool update \
+              "${gateway_args[@]}" \
+              --name "${SPOKE}-pool" \
+              --servers "$app_fqdn"
+          else
+            az network application-gateway address-pool create \
+              "${gateway_args[@]}" \
+              --name "${SPOKE}-pool" \
+              --servers "$app_fqdn"
+          fi
+
+          if az network application-gateway http-settings show \
+            "${gateway_args[@]}" --name "${SPOKE}-https" --output none 2>/dev/null; then
+            az network application-gateway http-settings update \
+              "${gateway_args[@]}" \
+              --name "${SPOKE}-https" \
+              --port 443 \
+              --protocol Https \
+              --host-name-from-backend-pool true
+          else
+            az network application-gateway http-settings create \
+              "${gateway_args[@]}" \
+              --name "${SPOKE}-https" \
+              --port 443 \
+              --protocol Https \
+              --host-name-from-backend-pool true
+          fi
+
+          if az network application-gateway http-listener show \
+            "${gateway_args[@]}" --name "${SPOKE}-listener" --output none 2>/dev/null; then
+            az network application-gateway http-listener update \
+              "${gateway_args[@]}" \
+              --name "${SPOKE}-listener" \
+              --frontend-ip private-frontend \
+              --frontend-port https \
+              --host-name "${SPOKE}.dar.internal" \
+              --ssl-cert wildcard-dar-internal
+          else
+            az network application-gateway http-listener create \
+              "${gateway_args[@]}" \
+              --name "${SPOKE}-listener" \
+              --frontend-ip private-frontend \
+              --frontend-port https \
+              --host-name "${SPOKE}.dar.internal" \
+              --ssl-cert wildcard-dar-internal
+          fi
+
+          if az network application-gateway rule show \
+            "${gateway_args[@]}" --name "${SPOKE}-rule" --output none 2>/dev/null; then
+            az network application-gateway rule update \
+              "${gateway_args[@]}" \
+              --name "${SPOKE}-rule" \
+              --rule-type Basic \
+              --http-listener "${SPOKE}-listener" \
+              --address-pool "${SPOKE}-pool" \
+              --http-settings "${SPOKE}-https" \
+              --priority "$priority"
+          else
+            az network application-gateway rule create \
+              "${gateway_args[@]}" \
+              --name "${SPOKE}-rule" \
+              --rule-type Basic \
+              --http-listener "${SPOKE}-listener" \
+              --address-pool "${SPOKE}-pool" \
+              --http-settings "${SPOKE}-https" \
+              --priority "$priority"
+          fi
