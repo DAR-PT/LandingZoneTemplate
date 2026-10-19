@@ -1,4 +1,4 @@
-name: Create spoke with Container App
+name: Spoke_And_Capp_Gen
 on:
   workflow_dispatch:
     inputs:
