@@ -1,4 +1,4 @@
-name: Create Spoke Repository
+name: Generate_Repo_From_Template
 
 on:
   workflow_dispatch:
