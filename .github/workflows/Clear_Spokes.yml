@@ -1,4 +1,4 @@
-name: Delete Spokes
+name: Clear_Spokes
 
 on:
   schedule:
