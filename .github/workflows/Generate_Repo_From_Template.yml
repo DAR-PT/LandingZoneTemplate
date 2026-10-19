@@ -71,8 +71,8 @@ jobs:
             target/
 
           echo "Removing platform workflows..."
-          rm -f target/.github/workflows/ClearSpokes.yml
-          rm -f target/.github/workflows/GenerateRepoFromTemplate.yml
+          rm -f target/.github/workflows/Clear_Spokes.yml
+          rm -f target/.github/workflows/Generate_Repo_From_Template.yml
           echo "Publishing repository..."
           cd target
 
