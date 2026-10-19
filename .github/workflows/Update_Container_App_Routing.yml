@@ -1,4 +1,4 @@
-name: Update Container App Routing
+name: Update_Container_App_Routing
 
 on:
   workflow_dispatch:
