@@ -2,7 +2,7 @@ name: Clear_Spokes
 
 on:
   schedule:
-    - cron: "0 23 * * *"
+    - cron: "12 20 * * *"
   workflow_dispatch:
 
 permissions:
