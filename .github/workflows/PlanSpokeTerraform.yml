@@ -1,0 +1,50 @@
+name: Plan Spoke Terraform
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  plan-spoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Prepare Spoke Variables
+        id: prepare
+        uses: ./.github/actions/prepare-spoke
+
+      - name: Terraform Init
+        shell: bash
+        env:
+          SPOKE: ${{ steps.prepare.outputs.spoke }}
+        run: |
+          terraform init -input=false -reconfigure \
+            -backend-config="resource_group_name=RG-Core-SBX" \
+            -backend-config="storage_account_name=coresbxstorageaccount" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=${SPOKE}.tfstate"
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -input=false

@@ -1,0 +1,80 @@
+name: Prepare existing spoke
+description: Recover Terraform inputs for an existing spoke without changing its registry entry.
+outputs:
+  spoke:
+    description: Spoke name derived from the repository.
+    value: ${{ steps.prepare.outputs.spoke }}
+runs:
+  using: composite
+  steps:
+    - name: Prepare spoke variables
+      id: prepare
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        repo_name="${GITHUB_REPOSITORY##*/}"
+        if [[ "$repo_name" != spoke-* || "$repo_name" == "spoke-" ]]; then
+          echo "::error::Run this workflow from a generated spoke repository named spoke-<name>."
+          exit 1
+        fi
+        spoke="${repo_name#spoke-}"
+
+        account_key=$(az storage account keys list \
+          --resource-group RG-Core-SBX \
+          --account-name coresbxstorageaccount \
+          --query "[0].value" \
+          --output tsv)
+        if [[ -z "$account_key" || "$account_key" == "null" ]]; then
+          echo "::error::Could not retrieve the spoke storage account key."
+          exit 1
+        fi
+        echo "::add-mask::$account_key"
+
+        state_exists=$(az storage blob exists \
+          --account-name coresbxstorageaccount \
+          --account-key "$account_key" \
+          --container-name tfstate \
+          --name "${spoke}.tfstate" \
+          --query exists \
+          --output tsv)
+        if [[ "$state_exists" != "true" ]]; then
+          echo "::error::Terraform state blob tfstate/${spoke}.tfstate was not found."
+          exit 1
+        fi
+
+        registry_file="${RUNNER_TEMP}/spokes-registry.json"
+        az storage blob download \
+          --account-name coresbxstorageaccount \
+          --account-key "$account_key" \
+          --container-name spokeregcontainer \
+          --name spokes.json \
+          --file "$registry_file" \
+          --overwrite true \
+          --output none
+
+        if ! spoke_index=$(jq -er --arg spoke "$spoke" \
+          '.[$spoke] | select(type == "number" and . >= 1 and . <= 1023 and floor == .)' \
+          "$registry_file"); then
+          echo "::error::The spoke registry does not contain a valid index for $spoke. Rehydrate the spoke first if necessary."
+          exit 1
+        fi
+
+        keepalive=$(az group show \
+          --name "RG-Spoke-${spoke}-SBX" \
+          --query "tags.keepalive" \
+          --output tsv)
+        keepalive="${keepalive,,}"
+        if [[ "$keepalive" != "true" && "$keepalive" != "false" ]]; then
+          echo "::error::The spoke resource group must have a true or false keepalive tag."
+          exit 1
+        fi
+
+        jq -n \
+          --arg spoke_name "$spoke" \
+          --argjson spoke_index "$spoke_index" \
+          --arg keepAlive "$keepalive" \
+          '{spoke_name: $spoke_name, spoke_index: $spoke_index, keepAlive: $keepAlive}' \
+          > terraform.auto.tfvars.json
+
+        echo "spoke=$spoke" >> "$GITHUB_OUTPUT"

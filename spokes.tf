@@ -2,8 +2,9 @@ resource "azurerm_resource_group" "spoke" {
   name     = "RG-Spoke-${var.spoke_name}-SBX"
   location = "North Europe"
   tags = {
-    Team      = var.spoke_name
-    keepalive = lower(var.keepAlive)
+    Team        = var.spoke_name
+    keepalive   = lower(var.keepAlive)
+    Owner_Email = var.Owner_Email
   }
 }
 
