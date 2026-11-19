@@ -58,8 +58,8 @@ workflow does not enforce these naming rules.
    Terraform loads this file automatically and uses the email for the resource
    group's `Owner_Email` tag. The email is stored in the repository, Terraform
    state, and the Azure tag; it is not a secret.
-5. In the generated repository, open **Actions**, select **Create spoke with
-   Container App**, and select **Run workflow**. Set `keepalive` to `true` to
+5. In the generated repository, open **Actions**, select **Initial_Setup**, and
+   select **Run workflow**. Set `keepalive` to `true` to
    protect the spoke for the next cleanup cycle, or leave the default `false`
    to allow cleanup. Run the workflow.
 6. Check the workflow logs and Azure resources. The workflow allocates a spoke
@@ -67,6 +67,13 @@ workflow does not enforce these naming rules.
    creates Application Gateway objects, and attempts to upload the updated spoke
    registry. A repository being created does not by itself mean the Azure spoke
    was deployed.
+7. For subsequent Terraform changes, commit the changes to the spoke repository.
+   To preview them without applying, open **Actions**, select **Plan Spoke
+   Terraform**, select **Run workflow**, and review the plan in the run logs.
+8. When ready to apply changes, select **Apply Spoke Terraform** in the spoke
+   repository's Actions tab and select **Run workflow**. Check the run logs
+   and Azure resources afterward. This workflow creates and immediately applies
+   a fresh plan; it does not reuse or require approval of the plan from step 7.
 
 If deployment fails, inspect the logs, Azure resources, Terraform state, and
 spoke registry before retrying: a failed run may have already created resources
@@ -86,9 +93,9 @@ a `.tfvars` file, environment variable, or command-line argument.
 
 ## Delete Spokes and keepalive
 
-**Delete Spokes** (`.github/workflows/ClearSpokes.yml`) is a platform workflow
-in the template repository. It runs daily at **23:00 UTC** and can also be
-started manually from **Actions → Delete Spokes → Run workflow**.
+**Clear_Spokes** (`.github/workflows/Clear_Spokes.yml`) is a platform workflow
+in the template repository. It runs daily at **20:12 UTC** and can also be
+started manually from **Actions → Clear_Spokes → Run workflow**.
 
 **Warning:** This is a bulk cleanup, not a delete-by-name operation. Each run
 selects every resource group in the configured Azure subscription whose name
@@ -100,10 +107,10 @@ For each selected group, the workflow attempts to remove associated hub peering,
 private DNS links and CNAME, and Application Gateway objects, then requests
 resource-group deletion and removes the spoke from its local registry copy. It
 attempts to upload the updated registry after processing. Resource-group
-deletion is asynchronous, and some shared-resource deletion errors are
-tolerated; check the workflow logs, Azure resources, and registry to confirm
-cleanup completed. The workflow does **not** delete the GitHub repository or
-Terraform state blob.
+deletion is asynchronous. Cleanup errors can fail the workflow before all
+resources are processed or the registry is uploaded; check the workflow logs,
+Azure resources, and registry to confirm cleanup completed. The workflow does
+**not** delete the GitHub repository or Terraform state blob.
 
 A resource group tagged `keepalive=true` is skipped for that cleanup run. The
 workflow then attempts to reset that tag to `false`, so protection lasts only
@@ -117,7 +124,7 @@ To clean up eligible spokes manually:
 1. Review **all** matching resource groups and their `keepalive` tags in the
    configured subscription. Set `keepalive=true` on any spoke that must survive
    this run; groups already tagged `true` will be reset to `false` afterward.
-2. Run **Delete Spokes** from the template repository's Actions tab.
+2. Run **Clear_Spokes** from the template repository's Actions tab.
 3. Inspect the run logs and verify resource-group deletion and registry updates
    in Azure. Resolve any failed or incomplete cleanup before reusing a spoke
    name or index.
