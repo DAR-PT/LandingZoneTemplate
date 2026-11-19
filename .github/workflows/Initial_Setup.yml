@@ -1,4 +1,4 @@
-name: Create spoke with Container App
+name: Initial_Setup
 on:
   workflow_dispatch:
     inputs:

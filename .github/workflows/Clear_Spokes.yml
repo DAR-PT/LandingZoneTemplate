@@ -1,8 +1,8 @@
-name: Delete Spokes
+name: Clear_Spokes
 
 on:
   schedule:
-    - cron: "0 23 * * *"
+    - cron: "12 20 * * *"
   workflow_dispatch:
 
 permissions:
@@ -30,6 +30,7 @@ jobs:
       - name: Find Spokes To Delete
         shell: bash
         run: |
+          set -euo pipefail
 
           az group list \
             --query "[?contains(name, 'RG-Spoke-') && tags.keepalive!='true'].name" \
@@ -41,126 +42,119 @@ jobs:
       - name: Delete Non-KeepAlive Spokes
         shell: bash
         run: |
-          while read RG; do
+          set -euo pipefail
 
+          retry() {
+            local max=5
+            local delay=15
+            local attempt=1
+
+            while true; do
+              "$@" && return 0
+
+              if [ "$attempt" -ge "$max" ]; then
+                echo "FAILED after $max attempts: $*" >&2
+                return 1
+              fi
+
+              echo "Retry $attempt/$max: $*" >&2
+              attempt=$((attempt + 1))
+              sleep "$delay"
+            done
+          }
+
+          ACCOUNT_KEY=$(az storage account keys list \
+            --resource-group RG-Core-SBX \
+            --account-name coresbxstorageaccount \
+            --query "[0].value" \
+            -o tsv)
+
+          echo "ACCOUNT_KEY=$ACCOUNT_KEY" >> "$GITHUB_ENV"
+
+          az storage blob download \
+            --account-name coresbxstorageaccount \
+            --account-key "$ACCOUNT_KEY" \
+            --container-name spokeregcontainer \
+            --name spokes.json \
+            --file spokes.json
+
+          while read RG; do
             [ -z "$RG" ] && continue
 
             spoke=$(echo "$RG" \
               | sed 's/^RG-Spoke-//' \
               | sed 's/-SBX$//')
 
-            retry() {
-              local max=5
-              local delay=15
-              local attempt=1
-
-              while true; do
-
-              "$@" && return 0
-
-              if [ "$attempt" -ge "$max" ]; then
-                echo "FAILED after $max attempts"
-                return 1
-              fi
-
-              echo "Retry $attempt/$max"
-              attempt=$((attempt + 1))
-
-              sleep $delay
-
-              done
-            }
-            
             echo "Deleting spoke: $spoke"
 
             PEERING_NAME="hub-to-$spoke"
 
             PEERING_ID=$(az network vnet peering show \
-                --resource-group RG-Hub-SBX \
-                --vnet-name vnet-hub-sbx \
-                --name "$PEERING_NAME" \
-                --query id \
-                -o tsv 2>/dev/null || true)
+              --resource-group RG-Hub-SBX \
+              --vnet-name vnet-hub-sbx \
+              --name "$PEERING_NAME" \
+              --query id \
+              -o tsv 2>/dev/null || true)
 
-              if [ -n "$PEERING_ID" ]; then
-              
+            if [ -n "$PEERING_ID" ]; then
               echo "Deleting peering: $PEERING_ID"
-              
-              retry az resource delete \
-                --ids "$PEERING_ID"
-
-              fi
-            
+              retry az resource delete --ids "$PEERING_ID"
+            fi
 
             retry az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.database.windows.net \
               --name "${spoke}-sql-link" \
-              --yes || true
+              --yes
 
             retry az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.vaultcore.azure.net \
               --name "${spoke}-kv-link" \
-              --yes || true
+              --yes
 
-           retry az network private-dns link vnet delete \
+            retry az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.azurecr.io \
               --name "${spoke}-acr-link" \
-              --yes || true
+              --yes
 
             retry az network private-dns link vnet delete \
               --resource-group RG-Hub-SBX \
               --zone-name privatelink.blob.core.windows.net \
               --name "${spoke}-storage-link" \
-              --yes || true 
-              
+              --yes
+
             retry az network application-gateway rule delete \
               --gateway-name agw-sbx \
               --resource-group RG-Hub-SBX \
-              --name "${spoke}-rule" || true
-              
+              --name "${spoke}-rule"
+
             retry az network application-gateway http-listener delete \
               --gateway-name agw-sbx \
               --resource-group RG-Hub-SBX \
-              --name "${spoke}-listener" || true
+              --name "${spoke}-listener"
 
             retry az network application-gateway http-settings delete \
               --gateway-name agw-sbx \
               --resource-group RG-Hub-SBX \
-              --name "${spoke}-https" || true
-              
+              --name "${spoke}-https"
+
             retry az network application-gateway address-pool delete \
               --gateway-name agw-sbx \
               --resource-group RG-Hub-SBX \
-              --name "${spoke}-pool" || true
+              --name "${spoke}-pool"
 
             retry az network private-dns record-set cname delete \
               --resource-group RG-Hub-SBX \
               --zone-name dar.internal \
               --name "$spoke" \
-              --yes || true
-              
+              --yes
+
             retry az group delete \
               --name "$RG" \
               --yes \
               --no-wait
-             
-            ACCOUNT_KEY=$(az storage account keys list \
-              --resource-group RG-Core-SBX \
-              --account-name coresbxstorageaccount \
-              --query "[0].value" \
-              -o tsv)
-              
-            echo "ACCOUNT_KEY=$ACCOUNT_KEY" >> $GITHUB_ENV  
-            
-            az storage blob download \
-              --account-name coresbxstorageaccount \
-              --account-key "$ACCOUNT_KEY" \
-              --container-name spokeregcontainer \
-              --name spokes.json \
-              --file spokes.json
 
             jq \
               --arg spoke "$spoke" \
@@ -169,11 +163,13 @@ jobs:
 
             mv tmp.json spokes.json
 
-            done < spokes_to_delete.txt
+          done < spokes_to_delete.txt
 
       - name: Find Surviving KeepAlive Spokes
         shell: bash
         run: |
+          set -euo pipefail
+
           az group list \
             --query "[?contains(name, 'RG-Spoke-') && tags.keepalive=='true'].name" \
             -o tsv > spokes_to_reset.txt
@@ -184,30 +180,28 @@ jobs:
       - name: Reset KeepAlive Flag
         shell: bash
         run: |
+          set -euo pipefail
+
           retry() {
-              local max=5
-              local delay=15
-              local attempt=1
+            local max=5
+            local delay=15
+            local attempt=1
 
-              while true; do
-
+            while true; do
               "$@" && return 0
 
               if [ "$attempt" -ge "$max" ]; then
-                echo "FAILED after $max attempts"
+                echo "FAILED after $max attempts: $*" >&2
                 return 1
               fi
 
-              echo "Retry $attempt/$max"
+              echo "Retry $attempt/$max: $*" >&2
               attempt=$((attempt + 1))
+              sleep "$delay"
+            done
+          }
 
-              sleep $delay
-
-              done
-            }
-            
           while read RG; do
-
             [ -z "$RG" ] && continue
 
             echo "Resetting keepalive tag on $RG"
@@ -221,10 +215,12 @@ jobs:
       - name: Commit Updated Registry
         shell: bash
         run: |
-           az storage blob upload \
-              --overwrite true \
-              --account-name coresbxstorageaccount \
-              --account-key "$ACCOUNT_KEY" \
-              --container-name spokeregcontainer \
-              --name spokes.json \
-              --file spokes.json
+          set -euo pipefail
+
+          az storage blob upload \
+            --overwrite true \
+            --account-name coresbxstorageaccount \
+            --account-key "$ACCOUNT_KEY" \
+            --container-name spokeregcontainer \
+            --name spokes.json \
+            --file spokes.json
