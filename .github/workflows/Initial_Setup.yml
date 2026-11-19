@@ -1,4 +1,4 @@
-name: Spoke_And_Capp_Gen
+name: Initial_Setup
 on:
   workflow_dispatch:
     inputs:
