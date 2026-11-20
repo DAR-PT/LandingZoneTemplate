@@ -3,6 +3,34 @@
 Template for creating sandbox spokes, including their networking, Container App,
 and hub connectivity.
 
+## Region for new deployments
+
+On 20 November 2026, the region for new spoke deployments was changed from
+North Europe to Italy North following Microsoft's recommendations.
+
+New repositories generated from this template create their resource group,
+spoke VNet and Container App in Italy North (`italynorth`). The app uses the parallel
+`cae-shared-italynorth-sbx` environment in `RG-Hub-SBX`.
+
+**Prerequisite:** Review and deploy the separate Italy North Container Apps
+environment in the landing-zone repository before planning or creating an Italy
+North spoke. Check regional service availability, subscription capacity and
+permissions first. Review the full landing-zone plan carefully: other pending
+changes to shared infrastructure can affect existing spokes. No environment is
+created merely by generating a repository.
+
+The existing hub, gateway, core services, DNS, storage and North Europe Container
+Apps environment remain in their current regions. Italy North spokes depend on
+the existing hub through cross-region peering and on its shared services;
+consider cross-region latency, transfer costs and availability. The example app
+uses external ingress; private endpoints or private ingress may need additional
+region-specific DNS and networking configuration.
+
+Existing cloned spoke repositories are not updated by changes to this template.
+Do not apply this configuration to an existing North Europe spoke as a migration:
+location changes can require destructive replacements. Plan a separate migration
+and review the state and workload before any such change.
+
 ## Spoke naming
 
 Choose a short, unique spoke name, such as `certificationmanagement`. Enter only
