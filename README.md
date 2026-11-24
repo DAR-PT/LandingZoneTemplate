@@ -133,12 +133,23 @@ spokes can be deleted.
 
 For each selected group, the workflow attempts to remove associated hub peering,
 private DNS links and CNAME, and Application Gateway objects, then requests
-resource-group deletion and removes the spoke from its local registry copy. It
-attempts to upload the updated registry after processing. Resource-group
-deletion is asynchronous. Cleanup errors can fail the workflow before all
-resources are processed or the registry is uploaded; check the workflow logs,
-Azure resources, and registry to confirm cleanup completed. The workflow does
-**not** delete the GitHub repository or Terraform state blob.
+asynchronous resource-group deletion. After successful cleanup steps, it compares
+a fresh `spokes.json` with the resource groups in the configured subscription.
+A registry entry is removed when its `RG-Spoke-<name>-SBX` resource group is
+absent; existing groups, including keepalive groups and groups still being
+deleted, are retained. A later successful run removes entries once deletion
+has completed. The workflow does **not** delete the GitHub repository or
+Terraform state blob.
+
+The workflow identity must be able to list all spoke resource groups in the
+subscription: an incomplete listing can cause valid entries to be removed.
+An ETag-conditional upload prevents overwriting a registry that changed during
+reconciliation; a conflict fails the workflow and requires a retry. It does
+not protect an allocation already written by an in-progress rehydration before
+its resource group exists. **Do not run spoke creation or rehydration during
+cleanup**, including the scheduled run; coordinate those workflows separately.
+Cleanup errors can prevent reconciliation entirely. Check the workflow logs,
+Azure resources and registry after every run.
 
 A resource group tagged `keepalive=true` is skipped for that cleanup run. The
 workflow then attempts to reset that tag to `false`, so protection lasts only

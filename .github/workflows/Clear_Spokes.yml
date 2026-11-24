@@ -63,21 +63,6 @@ jobs:
             done
           }
 
-          ACCOUNT_KEY=$(az storage account keys list \
-            --resource-group RG-Core-SBX \
-            --account-name coresbxstorageaccount \
-            --query "[0].value" \
-            -o tsv)
-
-          echo "ACCOUNT_KEY=$ACCOUNT_KEY" >> "$GITHUB_ENV"
-
-          az storage blob download \
-            --account-name coresbxstorageaccount \
-            --account-key "$ACCOUNT_KEY" \
-            --container-name spokeregcontainer \
-            --name spokes.json \
-            --file spokes.json
-
           while read RG; do
             [ -z "$RG" ] && continue
 
@@ -156,13 +141,6 @@ jobs:
               --yes \
               --no-wait
 
-            jq \
-              --arg spoke "$spoke" \
-              'del(.[$spoke])' \
-              spokes.json > tmp.json
-
-            mv tmp.json spokes.json
-
           done < spokes_to_delete.txt
 
       - name: Find Surviving KeepAlive Spokes
@@ -212,15 +190,50 @@ jobs:
 
           done < spokes_to_reset.txt
 
-      - name: Commit Updated Registry
+      - name: Reconcile Spoke Registry
         shell: bash
         run: |
           set -euo pipefail
 
-          az storage blob upload \
-            --overwrite true \
+          account_key=$(az storage account keys list \
+            --resource-group RG-Core-SBX \
             --account-name coresbxstorageaccount \
-            --account-key "$ACCOUNT_KEY" \
-            --container-name spokeregcontainer \
-            --name spokes.json \
-            --file spokes.json
+            --query "[0].value" \
+            --output tsv)
+          if [[ -z "$account_key" ]]; then
+            echo "::error::Could not obtain the registry storage account key."
+            exit 1
+          fi
+          echo "::add-mask::$account_key"
+
+          registry_args=(
+            --account-name coresbxstorageaccount
+            --account-key "$account_key"
+            --container-name spokeregcontainer
+            --name spokes.json
+          )
+          etag=$(az storage blob show "${registry_args[@]}" \
+            --query properties.etag --output tsv)
+          if [[ -z "$etag" || "$etag" == "null" ]]; then
+            echo "::error::Could not obtain the spoke registry ETag."
+            exit 1
+          fi
+
+          workdir=$(mktemp -d)
+          trap 'rm -rf "$workdir"' EXIT
+          az storage blob download "${registry_args[@]}" \
+            --if-match "$etag" --file "$workdir/registry.json" --output none
+          az group list --query '[].name' --output json > "$workdir/groups.json"
+
+          python3 scripts/reconcile_spoke_registry.py \
+            "$workdir/registry.json" "$workdir/groups.json" "$workdir/reconciled.json"
+
+          if [[ "$(jq -S -c . "$workdir/registry.json")" == "$(jq -S -c . "$workdir/reconciled.json")" ]]; then
+            echo "Registry is already consistent; no upload needed."
+            exit 0
+          fi
+
+          az storage blob upload "${registry_args[@]}" \
+            --overwrite true --if-match "$etag" \
+            --file "$workdir/reconciled.json" --output none
+          echo "Spoke registry updated."
